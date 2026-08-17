@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -174,6 +175,21 @@ export class EmployeesService {
   async update(user: CurrentUser, id: string, dto: UpdateEmployeeDto) {
     await this.accessScope.assertEmployeeAccess(user, id);
 
+    const containsEmploymentChange = [
+      dto.departmentId,
+      dto.jobTitle,
+      dto.employmentType,
+      dto.employmentStatus,
+      dto.startDate,
+      dto.endDate,
+    ].some((value) => value !== undefined);
+
+    if (containsEmploymentChange) {
+      throw new BadRequestException(
+        'Department, job title, employment type, employment status and employment dates must be changed through the employee employment or lifecycle endpoints.',
+      );
+    }
+
     const existingEmployee = await this.prisma.employee.findFirst({
       where: {
         id,
@@ -200,13 +216,6 @@ export class EmployeesService {
       await this.validateEmailIsUnique(user.organisationId, dto.email, id);
     }
 
-    if (dto.departmentId) {
-      await this.validateDepartmentBelongsToOrganisation(
-        user.organisationId,
-        dto.departmentId,
-      );
-    }
-
     const employee = await this.prisma.employee.update({
       where: {
         id,
@@ -217,12 +226,6 @@ export class EmployeesService {
         lastName: dto.lastName,
         email: dto.email,
         phone: dto.phone,
-        departmentId: dto.departmentId,
-        jobTitle: dto.jobTitle,
-        employmentType: dto.employmentType,
-        employmentStatus: dto.employmentStatus,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         idNumber: dto.idNumber,
         passportNumber: dto.passportNumber,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
