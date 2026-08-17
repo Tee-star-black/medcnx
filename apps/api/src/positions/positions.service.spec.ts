@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { EmploymentStatus } from '@prisma/client';
 import { PositionsService } from './positions.service';
 import { PrismaService } from '../database/prisma.service';
@@ -117,5 +118,120 @@ describe('PositionsService', () => {
       }),
     );
     expect(result.position.id).toBe(nextPosition.id);
+  });
+
+  it('creates a recruitment job from an approved position vacancy transactionally', async () => {
+    const position = {
+      id: 'position-1',
+      organisationId: 'org-1',
+      departmentId: 'department-1',
+      code: 'RN-001',
+      title: 'Registered Nurse',
+      description: 'Clinical nursing position.',
+      level: 'Professional',
+      employmentCategory: 'FULL_TIME',
+      approvedHeadcount: 4,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const transaction = {
+      recruitmentJob: {
+        create: jest.fn().mockResolvedValue({
+          id: 'job-1',
+          title: position.title,
+          status: 'OPEN',
+        }),
+      },
+      recruitmentPositionLink: {
+        create: jest.fn().mockResolvedValue({
+          id: 'link-1',
+          recruitmentJobId: 'job-1',
+          positionId: position.id,
+          plannedOpenings: 2,
+        }),
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      position: { findFirst: jest.fn().mockResolvedValue(position) },
+      employeePositionAssignment: { count: jest.fn().mockResolvedValue(2) },
+      recruitmentPositionLink: { findMany: jest.fn().mockResolvedValue([]) },
+      recruitmentJob: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      $transaction: jest.fn(async (callback: any) => callback(transaction)),
+    } as unknown as PrismaService;
+    const accessScope = {} as AccessScopeService;
+    const service = new PositionsService(prisma, accessScope);
+
+    const result = await service.createRecruitmentJob(actor, position.id, {
+      reference: 'VAC-RN-001',
+      plannedOpenings: 2,
+      openingDate: '2026-09-01T00:00:00.000Z',
+      closingDate: '2026-09-30T00:00:00.000Z',
+    });
+
+    expect(transaction.recruitmentJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          departmentId: position.departmentId,
+          title: position.title,
+          employmentType: position.employmentCategory,
+        }),
+      }),
+    );
+    expect(transaction.recruitmentPositionLink.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        recruitmentJobId: 'job-1',
+        positionId: position.id,
+        plannedOpenings: 2,
+      }),
+    });
+    expect(transaction.auditLog.create).toHaveBeenCalled();
+    expect(result.vacancySnapshot.remainingUnplannedVacancies).toBe(0);
+  });
+
+  it('rejects recruitment beyond remaining approved vacancies', async () => {
+    const position = {
+      id: 'position-1',
+      organisationId: 'org-1',
+      departmentId: 'department-1',
+      code: 'RN-001',
+      title: 'Registered Nurse',
+      description: null,
+      level: null,
+      employmentCategory: 'FULL_TIME',
+      approvedHeadcount: 4,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const prisma = {
+      position: { findFirst: jest.fn().mockResolvedValue(position) },
+      employeePositionAssignment: { count: jest.fn().mockResolvedValue(2) },
+      recruitmentPositionLink: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            recruitmentJobId: 'job-existing',
+            positionId: position.id,
+            plannedOpenings: 1,
+          },
+        ]),
+      },
+      recruitmentJob: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'job-existing', status: 'OPEN' },
+        ]),
+      },
+    } as unknown as PrismaService;
+    const service = new PositionsService(prisma, {} as AccessScopeService);
+
+    await expect(
+      service.createRecruitmentJob(actor, position.id, {
+        plannedOpenings: 2,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
