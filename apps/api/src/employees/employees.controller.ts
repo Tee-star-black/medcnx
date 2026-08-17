@@ -23,7 +23,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { EmployeeEmploymentTypeChangeDto } from './dto/employee-employment-type-change.dto';
 import { EmployeeLifecycleActionDto } from './dto/employee-lifecycle-action.dto';
+import { EmployeeManagerChangeDto } from './dto/employee-manager-change.dto';
+import { EmployeePromotionDto } from './dto/employee-promotion.dto';
+import { EmployeeTransferDto } from './dto/employee-transfer.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UploadEmployeeDocumentDto } from './dto/upload-employee-document.dto';
 import { UpdateEmployeeDocumentDto } from './dto/update-employee-document.dto';
@@ -149,6 +153,46 @@ export class EmployeesController {
   ) {
     await this.employeesService.findOne(user, id);
     return this.employeeLifecycleService.getHistory(user, id);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/employment/promote')
+  promoteEmployee(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeePromotionDto,
+  ) {
+    return this.employeeLifecycleService.promoteEmployee(user, id, dto);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/employment/transfer')
+  transferEmployee(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeTransferDto,
+  ) {
+    return this.employeeLifecycleService.transferEmployee(user, id, dto);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/employment/manager')
+  changeManager(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeManagerChangeDto,
+  ) {
+    return this.employeeLifecycleService.changeManager(user, id, dto);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/employment/type')
+  changeEmploymentType(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeEmploymentTypeChangeDto,
+  ) {
+    return this.employeeLifecycleService.changeEmploymentType(user, id, dto);
   }
 
   @RequirePermissions('employees:update')
