@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { EmployeesService } from './employees.service';
+import { AccessScopeService } from '../auth/access-scope.service';
 import { PrismaService } from '../database/prisma.service';
 import { EmployeeNotificationService } from '../employee-self-service/employee-notification.service';
+import { EmployeesService } from './employees.service';
 
 describe('EmployeesService', () => {
   let service: EmployeesService;
@@ -14,6 +15,13 @@ describe('EmployeesService', () => {
         {
           provide: EmployeeNotificationService,
           useValue: { notifyEmployee: jest.fn() },
+        },
+        {
+          provide: AccessScopeService,
+          useValue: {
+            employeeWhere: jest.fn().mockResolvedValue({ organisationId: 'org-1' }),
+            assertEmployeeAccess: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();
