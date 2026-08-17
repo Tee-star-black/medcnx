@@ -27,7 +27,6 @@ describe('EmployeeLifecycleService', () => {
       user: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       authSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
-      $executeRaw: jest.fn().mockResolvedValue(1),
     };
 
     transaction.employee.update.mockImplementation(({ data }: any) =>
@@ -36,7 +35,7 @@ describe('EmployeeLifecycleService', () => {
 
     const prisma = {
       employee: { findFirst: jest.fn().mockResolvedValue(employee) },
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      auditLog: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (callback: any) => callback(transaction)),
     } as unknown as PrismaService;
 
@@ -83,8 +82,14 @@ describe('EmployeeLifecycleService', () => {
       expect.objectContaining({ data: { status: UserStatus.DISABLED } }),
     );
     expect(transaction.authSession.updateMany).toHaveBeenCalled();
-    expect(transaction.$executeRaw).toHaveBeenCalled();
-    expect(transaction.auditLog.create).toHaveBeenCalled();
+    expect(transaction.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          entity: 'EmployeeLifecycle',
+          metadata: expect.objectContaining({ eventType: 'TERMINATED' }),
+        }),
+      }),
+    );
     expect(result.message).toContain('Historical records were preserved');
   });
 
@@ -170,15 +175,28 @@ describe('EmployeeLifecycleService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('returns employee history ordered by effective date', async () => {
+  it('projects employee history from the immutable audit ledger', async () => {
     const { service, prisma } = createService(activeEmployee);
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue([
-      { id: 'history-1', eventType: 'HIRED' },
+    (prisma.auditLog.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'history-1',
+        action: 'CREATE',
+        entity: 'Employee',
+        message: 'Employee created.',
+        metadata: null,
+        actorUserId: 'actor-1',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
     ]);
 
     const history = await service.getHistory(actor, activeEmployee.id);
 
-    expect(prisma.$queryRaw).toHaveBeenCalled();
-    expect(history).toEqual([{ id: 'history-1', eventType: 'HIRED' }]);
+    expect(prisma.auditLog.findMany).toHaveBeenCalled();
+    expect(history[0]).toEqual(
+      expect.objectContaining({
+        eventType: 'HIRED',
+        reason: 'Employee record created',
+      }),
+    );
   });
 });
