@@ -79,4 +79,18 @@ export class AccessScopeService {
       id: employee.id,
     };
   }
+
+  async assertEmployeeAccess(user: CurrentUser, employeeId: string) {
+    const scopeWhere = await this.employeeWhere(user);
+    const employee = await this.prisma.employee.findFirst({
+      where: {
+        AND: [scopeWhere, { id: employeeId }],
+      },
+      select: { id: true },
+    });
+
+    if (!employee) {
+      throw new ForbiddenException('You cannot access this employee.');
+    }
+  }
 }
