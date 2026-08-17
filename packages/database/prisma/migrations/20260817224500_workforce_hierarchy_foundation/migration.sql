@@ -66,15 +66,15 @@ ALTER TABLE "department_structures"
   ADD CONSTRAINT "department_structures_department_tenant_fkey"
   FOREIGN KEY ("departmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT "department_structures_parent_tenant_fkey"
-  FOREIGN KEY ("parentDepartmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE SET NULL ON UPDATE CASCADE,
+  FOREIGN KEY ("parentDepartmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT "department_structures_head_tenant_fkey"
-  FOREIGN KEY ("headEmployeeId", "organisationId") REFERENCES "employees"("id", "organisationId") ON DELETE SET NULL ON UPDATE CASCADE;
+  FOREIGN KEY ("headEmployeeId", "organisationId") REFERENCES "employees"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "positions"
   ADD CONSTRAINT "positions_organisationId_fkey"
   FOREIGN KEY ("organisationId") REFERENCES "organisations"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT "positions_department_tenant_fkey"
-  FOREIGN KEY ("departmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE SET NULL ON UPDATE CASCADE;
+  FOREIGN KEY ("departmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "employee_position_assignments"
   ADD CONSTRAINT "employee_position_assignments_organisationId_fkey"
