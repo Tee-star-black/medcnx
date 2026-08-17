@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { EmployeeLifecycleActionDto } from './dto/employee-lifecycle-action.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UploadEmployeeDocumentDto } from './dto/upload-employee-document.dto';
 import { UpdateEmployeeDocumentDto } from './dto/update-employee-document.dto';
@@ -131,6 +132,65 @@ export class EmployeesController {
     return this.employeesService.deleteEmployeeDocument(user, documentId);
   }
 
+  @RequirePermissions('employees:create')
+  @Post()
+  create(
+    @GetCurrentUser() user: CurrentUser,
+    @Body() createEmployeeDto: CreateEmployeeDto,
+  ) {
+    return this.employeesService.create(user, createEmployeeDto);
+  }
+
+  @RequirePermissions('employees:read')
+  @Get(':id/history')
+  async getEmploymentHistory(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+  ) {
+    await this.employeesService.findOne(user, id);
+    return this.employeeLifecycleService.getHistory(user, id);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/lifecycle/suspend')
+  suspendEmployee(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeLifecycleActionDto,
+  ) {
+    return this.employeeLifecycleService.suspendEmployee(user, id, dto);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/lifecycle/reactivate')
+  reactivateEmployee(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeLifecycleActionDto,
+  ) {
+    return this.employeeLifecycleService.reactivateEmployee(user, id, dto);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/lifecycle/resign')
+  resignEmployee(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeLifecycleActionDto,
+  ) {
+    return this.employeeLifecycleService.resignEmployee(user, id, dto);
+  }
+
+  @RequirePermissions('employees:terminate')
+  @Post(':id/lifecycle/terminate')
+  terminateEmployee(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeLifecycleActionDto,
+  ) {
+    return this.employeeLifecycleService.terminateEmployee(user, id, dto);
+  }
+
   @RequirePermissions('employees:read')
   @Get(':id')
   findOne(@GetCurrentUser() user: CurrentUser, @Param('id') id: string) {
@@ -197,15 +257,6 @@ export class EmployeesController {
     );
   }
 
-  @RequirePermissions('employees:create')
-  @Post()
-  create(
-    @GetCurrentUser() user: CurrentUser,
-    @Body() createEmployeeDto: CreateEmployeeDto,
-  ) {
-    return this.employeesService.create(user, createEmployeeDto);
-  }
-
   @RequirePermissions('employees:update')
   @Patch(':id')
   update(
@@ -218,7 +269,11 @@ export class EmployeesController {
 
   @RequirePermissions('employees:terminate')
   @Delete(':id')
-  remove(@GetCurrentUser() user: CurrentUser, @Param('id') id: string) {
-    return this.employeeLifecycleService.terminateEmployee(user, id);
+  remove(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: EmployeeLifecycleActionDto,
+  ) {
+    return this.employeeLifecycleService.terminateEmployee(user, id, dto);
   }
 }
