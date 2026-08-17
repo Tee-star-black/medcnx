@@ -1,0 +1,400 @@
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Payslip - MedCNX Admin - August 2026</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #e5e7eb;
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 24px auto;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      padding: 18mm;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 32px;
+      border-bottom: 2px solid #111827;
+      padding-bottom: 18px;
+      margin-bottom: 24px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -0.05em;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .badge {
+      border: 1px solid #111827;
+      padding: 10px 14px;
+      text-align: right;
+      min-width: 170px;
+    }
+
+    .badge strong {
+      display: block;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+    }
+
+    .badge span {
+      display: block;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .box {
+      border: 1px solid #d1d5db;
+      padding: 14px;
+      min-height: 110px;
+    }
+
+    .box h2 {
+      margin: 0 0 10px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: #6b7280;
+    }
+
+    .line {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid #f3f4f6;
+      padding: 6px 0;
+    }
+
+    .line:last-child {
+      border-bottom: 0;
+    }
+
+    .line span:first-child {
+      color: #6b7280;
+    }
+
+    .line strong {
+      text-align: right;
+      font-weight: 700;
+    }
+
+    .tables {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #d1d5db;
+    }
+
+    th {
+      background: #111827;
+      color: #ffffff;
+      text-align: left;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 10px;
+    }
+
+    td {
+      border-top: 1px solid #e5e7eb;
+      padding: 9px 10px;
+    }
+
+    td:last-child {
+      text-align: right;
+      font-weight: 700;
+    }
+
+    tfoot td {
+      background: #f9fafb;
+      font-weight: 700;
+      border-top: 2px solid #111827;
+    }
+
+    .net {
+      margin-top: 18px;
+      background: #111827;
+      color: #ffffff;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: center;
+      padding: 18px;
+    }
+
+    .net p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .net h2 {
+      margin: 4px 0 0;
+      font-size: 30px;
+      letter-spacing: -0.05em;
+    }
+
+    .note {
+      border: 1px solid #d1d5db;
+      padding: 14px;
+      margin-top: 18px;
+      color: #374151;
+    }
+
+    .footer {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      color: #6b7280;
+      font-size: 11px;
+      border-top: 1px solid #d1d5db;
+      padding-top: 14px;
+    }
+
+    .signature {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+    }
+
+    .signature div {
+      border-top: 1px solid #111827;
+      padding-top: 8px;
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .page {
+        margin: 0;
+        border: 0;
+        width: auto;
+        min-height: auto;
+        padding: 14mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="topbar">
+      <div class="brand">
+        <h1>MedCNX Demo Clinic</h1>
+        <p>admin@medcnx.local</p>
+        <p>+27 11 000 0000</p>
+        <p>Johannesburg, Gauteng, South Africa</p>
+      </div>
+
+      <div class="badge">
+        <strong>PAYSLIP</strong>
+        <span>August 2026</span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="box">
+        <h2>Employee details</h2>
+        <div class="line"><span>Name</span><strong>MedCNX Admin</strong></div>
+        <div class="line"><span>Employee no.</span><strong>MED-ADMIN-001</strong></div>
+        <div class="line"><span>Job title</span><strong>System Administrator</strong></div>
+        <div class="line"><span>Department</span><strong>Administration</strong></div>
+      </div>
+
+      <div class="box">
+        <h2>Pay details</h2>
+        <div class="line"><span>Pay period</span><strong>August 2026</strong></div>
+        <div class="line"><span>Payment date</span><strong>Not specified</strong></div>
+        <div class="line"><span>Generated by</span><strong>MedCNX Admin</strong></div>
+        <div class="line"><span>PAYE mode</span><strong>Manual phase 1</strong></div>
+      </div>
+    </section>
+
+    <section class="tables">
+      <table>
+        <thead>
+          <tr>
+            <th>Earnings</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>Basic salary</td>
+            <td>R 60 000,00</td>
+          </tr>
+          <tr>
+            <td>Overtime</td>
+            <td>R 350 000,00</td>
+          </tr>
+          <tr>
+            <td>Bonus</td>
+            <td>R 0,00</td>
+          </tr>
+          <tr>
+            <td>Commission</td>
+            <td>R 0,00</td>
+          </tr>
+          <tr>
+            <td>Allowances</td>
+            <td>R 0,00</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Gross pay</td>
+            <td>R 410 000,00</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Deductions</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>PAYE</td>
+            <td>R 168 584,92</td>
+          </tr>
+          <tr>
+            <td>UIF employee</td>
+            <td>R 177,12</td>
+          </tr>
+          <tr>
+            <td>Pension employee</td>
+            <td>R 0,00</td>
+          </tr>
+          <tr>
+            <td>Medical aid employee</td>
+            <td>R 0,00</td>
+          </tr>
+          <tr>
+            <td>Other deductions</td>
+            <td>R 0,00</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total deductions</td>
+            <td>R 168 762,04</td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+
+    <section class="tables">
+      <table>
+        <thead>
+          <tr>
+            <th>Employer contributions</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr>
+            <td>UIF employer</td>
+            <td>R 177,12</td>
+          </tr>
+          <tr>
+            <td>Pension employer</td>
+            <td>R 0,00</td>
+          </tr>
+          <tr>
+            <td>Medical aid employer</td>
+            <td>R 0,00</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Employer contribution total</td>
+            <td>R 177,12</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="box">
+        <h2>Payroll summary</h2>
+        <div class="line"><span>Gross pay</span><strong>R 410 000,00</strong></div>
+        <div class="line"><span>Total deductions</span><strong>R 168 762,04</strong></div>
+        <div class="line"><span>Employer contributions</span><strong>R 177,12</strong></div>
+        <div class="line"><span>UIF cap applied</span><strong>R 177,12</strong></div>
+      </div>
+    </section>
+
+    <section class="net">
+      <div>
+        <p>Net pay</p>
+        <h2>R 241 237,96</h2>
+      </div>
+
+      <div>
+        <p>Payable to</p>
+        <h2>MedCNX Admin</h2>
+      </div>
+    </section>
+
+    <section class="note"><strong>Notes:</strong><br />Generated from payroll run: August 2026 Payroll Run</section>
+
+    <section class="signature">
+      <div>Employer / HR signature</div>
+      <div>Employee acknowledgement</div>
+    </section>
+
+    <section class="footer">
+      <p>This payslip was generated by MedCNX payroll automation.</p>
+      <p>Generated on 17 Jul 2026</p>
+    </section>
+  </main>
+</body>
+</html>

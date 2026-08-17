@@ -1,0 +1,32 @@
+# MedCNX
+
+MedCNX is a secure, cloud-ready HR management platform designed for medical practices, clinics and healthcare organisations.
+
+## Stack
+
+- Next.js
+- TypeScript
+- NestJS
+- PostgreSQL
+- Prisma
+- Google Cloud Run
+- Google Cloud SQL
+- Google Cloud Storage
+- Google Secret Manager
+
+## Applications
+
+- `apps/web` — frontend web application
+- `apps/api` — backend API
+
+## Packages
+
+- `packages/database` — Prisma schema and database client
+- `packages/shared` — shared types, roles and permissions
+- `packages/ui` — shared UI components
+
+## Development
+
+```bash
+npm install
+npm run dev

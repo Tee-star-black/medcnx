@@ -1,0 +1,8 @@
+-- RenameIndex
+ALTER INDEX "generated_document_versions_generatedDocumentId_versionNumber_k" RENAME TO "generated_document_versions_generatedDocumentId_versionNumb_key";
+
+-- RenameIndex
+ALTER INDEX "performance_development_plans_organisationId_status_targetDate_" RENAME TO "performance_development_plans_organisationId_status_targetD_idx";
+
+-- RenameIndex
+ALTER INDEX "performance_reviews_cycleId_employeeId_reviewerUserId_reviewerT" RENAME TO "performance_reviews_cycleId_employeeId_reviewerUserId_revie_key";

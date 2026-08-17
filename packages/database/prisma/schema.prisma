@@ -1,0 +1,1692 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AuditLog {
+  id             String      @id @default(uuid())
+  organisationId String
+  actorUserId    String?
+  employeeId     String?
+  action         AuditAction
+  entity         String
+  entityId       String?
+  message        String?
+  ipAddress      String?
+  userAgent      String?
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  actor        User?        @relation("AuditActor", fields: [actorUserId], references: [id])
+  employee     Employee?    @relation(fields: [employeeId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@index([employeeId])
+  @@index([entity, entityId])
+  @@index([organisationId])
+  @@map("audit_logs")
+}
+
+model AuthSession {
+  id               String    @id @default(uuid())
+  userId           String
+  refreshTokenHash String
+  ipAddress        String?
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("auth_sessions")
+}
+
+model Department {
+  id             String   @id @default(uuid())
+  organisationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employees       Employee[]
+  recruitmentJobs RecruitmentJob[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+  @@map("departments")
+}
+
+model EmployeeDocument {
+  id                String                   @id @default(uuid())
+  organisationId    String
+  employeeId        String
+  category          EmployeeDocumentCategory @default(OTHER)
+  title             String
+  description       String?
+  fileName          String
+  originalName      String
+  mimeType          String
+  sizeBytes         Int
+  storageKey        String
+  isConfidential    Boolean                  @default(false)
+  visibleToEmployee Boolean                  @default(true)
+  expiryDate        DateTime?
+  uploadedByUserId  String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  uploadedBy   User?        @relation("UploadedEmployeeDocuments", fields: [uploadedByUserId], references: [id])
+
+  @@index([category])
+  @@index([employeeId])
+  @@index([expiryDate])
+  @@index([organisationId])
+  @@map("employee_documents")
+}
+
+model DocumentTemplate {
+  id                        String                   @id @default(uuid())
+  organisationId            String
+  name                      String
+  description               String?
+  category                  DocumentTemplateCategory
+  status                    DocumentTemplateStatus   @default(DRAFT)
+  signatureMode             DocumentSignatureMode    @default(NONE)
+  defaultEmployeeVisibility Boolean                  @default(false)
+  currentVersionId          String?                  @unique
+  createdByUserId           String
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+
+  organisation   Organisation              @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy      User                      @relation("CreatedDocumentTemplates", fields: [createdByUserId], references: [id])
+  currentVersion DocumentTemplateVersion?  @relation("CurrentDocumentTemplateVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions       DocumentTemplateVersion[] @relation("DocumentTemplateVersions")
+  documents      GeneratedDocument[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId, status])
+  @@index([category])
+  @@map("document_templates")
+}
+
+model DocumentTemplateVersion {
+  id                      String   @id @default(uuid())
+  organisationId          String
+  templateId              String
+  versionNumber           Int
+  storageKey              String
+  originalName            String
+  mimeType                String   @default("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+  sizeBytes               Int
+  checksumSha256          String
+  detectedPlaceholders    String[] @default([])
+  unsupportedPlaceholders String[] @default([])
+  isValid                 Boolean  @default(false)
+  validationErrors        Json?
+  uploadedByUserId        String
+  createdAt               DateTime @default(now())
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  template     DocumentTemplate    @relation("DocumentTemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  currentFor   DocumentTemplate?   @relation("CurrentDocumentTemplateVersion")
+  uploadedBy   User                @relation("UploadedDocumentTemplateVersions", fields: [uploadedByUserId], references: [id])
+  documents    GeneratedDocument[]
+
+  @@unique([templateId, versionNumber])
+  @@index([organisationId])
+  @@map("document_template_versions")
+}
+
+model OrganisationBranding {
+  id                    String    @id @default(uuid())
+  organisationId        String    @unique
+  legalName             String?
+  tradingName           String?
+  registrationNumber    String?
+  address               String?
+  email                 String?
+  phone                 String?
+  defaultDocumentFooter String?
+  logoStorageKey        String?
+  logoMimeType          String?
+  logoUpdatedAt         DateTime?
+  updatedByUserId       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  updatedBy    User?        @relation("UpdatedOrganisationBranding", fields: [updatedByUserId], references: [id])
+
+  @@map("organisation_branding")
+}
+
+model OrganisationSignature {
+  id              String                      @id @default(uuid())
+  organisationId  String                      @unique
+  ceoUserId       String?
+  ceoFullName     String?
+  ceoJobTitle     String?
+  storageKey      String?
+  mimeType        String?
+  sizeBytes       Int?
+  checksumSha256  String?
+  status          OrganisationSignatureStatus @default(NOT_CONFIGURED)
+  updatedByUserId String?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  ceo          User?        @relation("OrganisationCeo", fields: [ceoUserId], references: [id])
+  updatedBy    User?        @relation("UpdatedOrganisationSignature", fields: [updatedByUserId], references: [id])
+
+  @@index([ceoUserId])
+  @@map("organisation_signatures")
+}
+
+model GeneratedDocument {
+  id                   String                   @id @default(uuid())
+  organisationId       String
+  employeeId           String?
+  recipientId          String?
+  templateId           String
+  templateVersionId    String
+  referenceNumber      String
+  title                String
+  category             DocumentTemplateCategory
+  status               GeneratedDocumentStatus  @default(DRAFT)
+  signatureMode        DocumentSignatureMode
+  signatureStatus      DocumentSignatureStatus  @default(NOT_REQUIRED)
+  visibleToEmployee    Boolean                  @default(false)
+  withdrawnAt          DateTime?
+  effectiveDate        DateTime?
+  idempotencyKey       String?
+  currentVersionNumber Int                      @default(1)
+  generatedByUserId    String
+  approvedByUserId     String?
+  approvedAt           DateTime?
+  publishedByUserId    String?
+  publishedAt          DateTime?
+  failureReason        String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  organisation    Organisation               @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee        Employee?                  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  recipient       DocumentRecipient?         @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+  template        DocumentTemplate           @relation(fields: [templateId], references: [id])
+  templateVersion DocumentTemplateVersion    @relation(fields: [templateVersionId], references: [id])
+  generatedBy     User                       @relation("GeneratedDocuments", fields: [generatedByUserId], references: [id])
+  approvedBy      User?                      @relation("ApprovedGeneratedDocuments", fields: [approvedByUserId], references: [id])
+  publishedBy     User?                      @relation("PublishedGeneratedDocuments", fields: [publishedByUserId], references: [id])
+  versions        GeneratedDocumentVersion[]
+  approvals       DocumentApproval[]
+
+  @@unique([organisationId, referenceNumber])
+  @@unique([organisationId, idempotencyKey])
+  @@index([organisationId, status])
+  @@index([employeeId, visibleToEmployee, status])
+  @@index([recipientId])
+  @@index([templateId])
+  @@map("generated_documents")
+}
+
+model DocumentRecipient {
+  id                  String    @id @default(uuid())
+  organisationId      String
+  firstName           String
+  lastName            String
+  email               String?
+  phone               String?
+  idNumber            String?
+  address             String?
+  jobTitle            String?
+  department          String?
+  proposedSalary      Decimal?  @db.Decimal(12, 2)
+  proposedStartDate   DateTime?
+  candidateId         String?
+  convertedEmployeeId String?
+  createdByUserId     String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organisation      Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy         User                @relation("CreatedDocumentRecipients", fields: [createdByUserId], references: [id])
+  candidate         Candidate?          @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  convertedEmployee Employee?           @relation("ConvertedDocumentRecipients", fields: [convertedEmployeeId], references: [id], onDelete: SetNull)
+  documents         GeneratedDocument[]
+
+  @@index([organisationId])
+  @@index([email])
+  @@index([candidateId])
+  @@index([convertedEmployeeId])
+  @@map("document_recipients")
+}
+
+model GeneratedDocumentVersion {
+  id                  String   @id @default(uuid())
+  organisationId      String
+  generatedDocumentId String
+  versionNumber       Int
+  docxStorageKey      String?
+  pdfStorageKey       String?
+  docxSizeBytes       Int?
+  pdfSizeBytes        Int?
+  checksumSha256      String?
+  mappedDataSnapshot  Json
+  brandingSnapshot    Json?
+  signatureInserted   Boolean  @default(false)
+  createdByUserId     String
+  createdAt           DateTime @default(now())
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  document     GeneratedDocument @relation(fields: [generatedDocumentId], references: [id], onDelete: Cascade)
+  createdBy    User              @relation("GeneratedDocumentVersions", fields: [createdByUserId], references: [id])
+
+  @@unique([generatedDocumentId, versionNumber])
+  @@index([organisationId])
+  @@map("generated_document_versions")
+}
+
+model DocumentApproval {
+  id                  String                 @id @default(uuid())
+  organisationId      String
+  generatedDocumentId String
+  requestedByUserId   String
+  assignedToUserId    String
+  status              DocumentApprovalStatus @default(PENDING)
+  decisionNote        String?
+  requestedAt         DateTime               @default(now())
+  decidedAt           DateTime?
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  document     GeneratedDocument @relation(fields: [generatedDocumentId], references: [id], onDelete: Cascade)
+  requestedBy  User              @relation("RequestedDocumentApprovals", fields: [requestedByUserId], references: [id])
+  assignedTo   User              @relation("AssignedDocumentApprovals", fields: [assignedToUserId], references: [id])
+
+  @@index([organisationId, status])
+  @@index([assignedToUserId, status])
+  @@index([generatedDocumentId])
+  @@map("document_approvals")
+}
+
+model Employee {
+  id                       String           @id @default(uuid())
+  organisationId           String
+  userId                   String?          @unique
+  departmentId             String?
+  managerId                String?
+  employeeNumber           String
+  firstName                String
+  lastName                 String
+  email                    String?
+  personalEmail            String?
+  phone                    String?
+  preferredName            String?
+  residentialAddress       String?
+  jobTitle                 String?
+  employmentType           String?
+  employmentStatus         EmploymentStatus @default(ACTIVE)
+  startDate                DateTime?
+  endDate                  DateTime?
+  idNumber                 String?
+  passportNumber           String?
+  dateOfBirth              DateTime?
+  gender                   String?
+  nationality              String?
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  auditLogs                   AuditLog[]
+  employeeDocuments           EmployeeDocument[]
+  compensationProfile         EmployeeCompensationProfile?
+  payrollRunItems             PayrollRunItem[]
+  payrollAuditFindings        PayrollAuditFinding[]
+  department                  Department?                    @relation(fields: [departmentId], references: [id])
+  organisation                Organisation                   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user                        User?                          @relation(fields: [userId], references: [id])
+  leaveDocuments              LeaveDocument[]
+  leaveRequests               LeaveRequest[]
+  attendanceRecords           AttendanceRecord[]
+  attendanceCorrections       AttendanceCorrectionRequest[]
+  profileChangeRequests       EmployeeProfileChangeRequest[]
+  convertedDocumentRecipients DocumentRecipient[]            @relation("ConvertedDocumentRecipients")
+  generatedDocuments          GeneratedDocument[]
+  manager                     Employee?                      @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports               Employee[]                     @relation("EmployeeManager")
+  performanceReviews          PerformanceReview[]            @relation("PerformanceReviewSubject")
+  reviewerPerformanceReviews  PerformanceReview[]            @relation("PerformanceReviewReviewerEmployee")
+  performanceGoals            PerformanceGoal[]
+  developmentPlans            PerformanceDevelopmentPlan[]
+
+  @@unique([organisationId, employeeNumber])
+  @@index([departmentId])
+  @@index([managerId])
+  @@index([email])
+  @@index([organisationId])
+  @@map("employees")
+}
+
+model EmployeeCompensationProfile {
+  id             String @id @default(uuid())
+  organisationId String
+  employeeId     String @unique
+
+  paymentFrequency String  @default("MONTHLY")
+  basicSalary      Decimal @default(0) @db.Decimal(12, 2)
+
+  autoPaye   Boolean @default(true)
+  uifEnabled Boolean @default(true)
+
+  pensionEmployee Decimal @default(0) @db.Decimal(12, 2)
+  pensionEmployer Decimal @default(0) @db.Decimal(12, 2)
+
+  medicalAidEmployee   Decimal @default(0) @db.Decimal(12, 2)
+  medicalAidEmployer   Decimal @default(0) @db.Decimal(12, 2)
+  medicalSchemeMembers Int     @default(0)
+
+  taxDirectiveMode      String    @default("NONE")
+  taxDirectiveReference String?
+  taxDirectiveValue     Decimal?  @db.Decimal(8, 2)
+  taxDirectiveValidFrom DateTime?
+  taxDirectiveValidTo   DateTime?
+
+  defaultAllowances      Decimal @default(0) @db.Decimal(12, 2)
+  defaultOtherDeductions Decimal @default(0) @db.Decimal(12, 2)
+
+  bankName          String?
+  bankAccountNumber String?
+  paymentReference  String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@index([employeeId])
+  @@map("employee_compensation_profiles")
+}
+
+model PayrollRun {
+  id             String           @id @default(uuid())
+  organisationId String
+  title          String
+  periodMonth    Int
+  periodYear     Int
+  status         PayrollRunStatus @default(DRAFT)
+
+  employeeCount              Int     @default(0)
+  totalBasicSalary           Decimal @default(0) @db.Decimal(12, 2)
+  totalOvertime              Decimal @default(0) @db.Decimal(12, 2)
+  totalBonus                 Decimal @default(0) @db.Decimal(12, 2)
+  totalCommission            Decimal @default(0) @db.Decimal(12, 2)
+  totalAllowances            Decimal @default(0) @db.Decimal(12, 2)
+  totalGrossPay              Decimal @default(0) @db.Decimal(12, 2)
+  totalPaye                  Decimal @default(0) @db.Decimal(12, 2)
+  totalUifEmployee           Decimal @default(0) @db.Decimal(12, 2)
+  totalPensionEmployee       Decimal @default(0) @db.Decimal(12, 2)
+  totalMedicalAidEmployee    Decimal @default(0) @db.Decimal(12, 2)
+  totalOtherDeductions       Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions            Decimal @default(0) @db.Decimal(12, 2)
+  totalNetPay                Decimal @default(0) @db.Decimal(12, 2)
+  totalUifEmployer           Decimal @default(0) @db.Decimal(12, 2)
+  totalSdlEmployer           Decimal @default(0) @db.Decimal(12, 2)
+  totalPensionEmployer       Decimal @default(0) @db.Decimal(12, 2)
+  totalMedicalAidEmployer    Decimal @default(0) @db.Decimal(12, 2)
+  totalEmployerContributions Decimal @default(0) @db.Decimal(12, 2)
+
+  notes               String?
+  calculatedAt        DateTime?
+  lockedAt            DateTime?
+  lockedByUserId      String?
+  lockReason          String?
+  calculationVersion  String?
+  calculationSnapshot Json?
+  createdByUserId     String?
+  finalisedByUserId   String?
+  finalisedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organisation Organisation           @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User?                  @relation("CreatedPayrollRuns", fields: [createdByUserId], references: [id])
+  finalisedBy  User?                  @relation("FinalisedPayrollRuns", fields: [finalisedByUserId], references: [id])
+  items        PayrollRunItem[]
+  audit        PayrollAudit?
+  timeline     PayrollTimelineEvent[]
+  approvals    PayrollApproval[]
+
+  @@unique([organisationId, periodMonth, periodYear, title])
+  @@index([organisationId])
+  @@index([periodMonth, periodYear])
+  @@index([status])
+  @@index([lockedAt])
+  @@map("payroll_runs")
+}
+
+model PayrollRunItem {
+  id             String @id @default(uuid())
+  organisationId String
+  payrollRunId   String
+  employeeId     String
+
+  periodMonth Int
+  periodYear  Int
+
+  basicSalary Decimal @default(0) @db.Decimal(12, 2)
+  overtime    Decimal @default(0) @db.Decimal(12, 2)
+  bonus       Decimal @default(0) @db.Decimal(12, 2)
+  commission  Decimal @default(0) @db.Decimal(12, 2)
+  allowances  Decimal @default(0) @db.Decimal(12, 2)
+  grossPay    Decimal @default(0) @db.Decimal(12, 2)
+
+  paye               Decimal @default(0) @db.Decimal(12, 2)
+  uifEmployee        Decimal @default(0) @db.Decimal(12, 2)
+  pensionEmployee    Decimal @default(0) @db.Decimal(12, 2)
+  medicalAidEmployee Decimal @default(0) @db.Decimal(12, 2)
+  otherDeductions    Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions    Decimal @default(0) @db.Decimal(12, 2)
+  netPay             Decimal @default(0) @db.Decimal(12, 2)
+
+  uifEmployer        Decimal @default(0) @db.Decimal(12, 2)
+  sdlEmployer        Decimal @default(0) @db.Decimal(12, 2)
+  pensionEmployer    Decimal @default(0) @db.Decimal(12, 2)
+  medicalAidEmployer Decimal @default(0) @db.Decimal(12, 2)
+  employerTotal      Decimal @default(0) @db.Decimal(12, 2)
+
+  payeMode                     String?
+  payeTaxYear                  Int?
+  payeAnnualTaxableIncome      Decimal? @db.Decimal(12, 2)
+  payeAnnualTaxBeforeRebate    Decimal? @db.Decimal(12, 2)
+  payeAnnualRebate             Decimal? @db.Decimal(12, 2)
+  payeAnnualMedicalCredit      Decimal? @db.Decimal(12, 2)
+  payeAnnualTaxAfterRebate     Decimal? @db.Decimal(12, 2)
+  payeRegularTaxableIncome     Decimal? @db.Decimal(12, 2)
+  payeRegularTaxableIncomeYtd  Decimal? @db.Decimal(12, 2)
+  payeAnnualPaymentsYtd        Decimal? @db.Decimal(12, 2)
+  payeYtdBeforeCurrent         Decimal? @db.Decimal(12, 2)
+  payeCumulativeLiability      Decimal? @db.Decimal(12, 2)
+  payeAnnualPaymentTax         Decimal? @db.Decimal(12, 2)
+  payePeriodsWorked            Int?
+  allowableRetirementDeduction Decimal? @db.Decimal(12, 2)
+
+  payslipDocumentId   String?
+  inputSnapshot       Json?
+  calculationSnapshot Json?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payrollRun   PayrollRun   @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([payrollRunId, employeeId])
+  @@index([organisationId])
+  @@index([payrollRunId])
+  @@index([employeeId])
+  @@index([periodMonth, periodYear])
+  @@map("payroll_run_items")
+}
+
+model PayrollAudit {
+  id             String @id @default(uuid())
+  organisationId String
+  payrollRunId   String @unique
+
+  healthScore Int                   @default(100)
+  riskLevel   PayrollAuditRiskLevel @default(LOW)
+
+  criticalCount Int @default(0)
+  highCount     Int @default(0)
+  warningCount  Int @default(0)
+  infoCount     Int @default(0)
+
+  summary      String?
+  blocked      Boolean  @default(false)
+  analysedAt   DateTime @default(now())
+  analysedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payrollRun   PayrollRun            @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  analysedBy   User?                 @relation("AnalysedPayrollAudits", fields: [analysedById], references: [id])
+  findings     PayrollAuditFinding[]
+
+  @@index([organisationId])
+  @@index([payrollRunId])
+  @@index([riskLevel])
+  @@index([blocked])
+  @@map("payroll_audits")
+}
+
+model PayrollAuditFinding {
+  id             String  @id @default(uuid())
+  organisationId String
+  payrollAuditId String
+  employeeId     String?
+
+  ruleCode String
+  severity PayrollAuditSeverity
+  status   PayrollAuditFindingStatus @default(OPEN)
+
+  title       String
+  description String
+
+  currentValue  Decimal? @db.Decimal(14, 2)
+  previousValue Decimal? @db.Decimal(14, 2)
+  varianceValue Decimal? @db.Decimal(14, 2)
+  varianceRate  Decimal? @db.Decimal(8, 4)
+
+  metadata Json?
+
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+
+  resolvedById   String?
+  resolvedAt     DateTime?
+  resolutionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payrollAudit   PayrollAudit @relation(fields: [payrollAuditId], references: [id], onDelete: Cascade)
+  employee       Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  acknowledgedBy User?        @relation("AcknowledgedPayrollFindings", fields: [acknowledgedById], references: [id])
+  resolvedBy     User?        @relation("ResolvedPayrollFindings", fields: [resolvedById], references: [id])
+
+  @@index([organisationId])
+  @@index([payrollAuditId])
+  @@index([employeeId])
+  @@index([severity])
+  @@index([status])
+  @@index([ruleCode])
+  @@map("payroll_audit_findings")
+}
+
+model PayrollTimelineEvent {
+  id             String  @id @default(uuid())
+  organisationId String
+  payrollRunId   String
+  actorUserId    String?
+
+  eventType String
+  title     String
+  message   String?
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payrollRun   PayrollRun   @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("PayrollTimelineActors", fields: [actorUserId], references: [id])
+
+  @@index([organisationId])
+  @@index([payrollRunId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("payroll_timeline_events")
+}
+
+model PayrollApproval {
+  id             String @id @default(uuid())
+  organisationId String
+  payrollRunId   String
+
+  approvalType PayrollApprovalType
+  status       PayrollApprovalStatus @default(PENDING)
+
+  requestedByUserId String?
+  approverUserId    String?
+
+  requestedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  expiresAt   DateTime?
+
+  requestNote     String?
+  decisionNote    String?
+  rejectionReason String?
+
+  summarySnapshot Json?
+  metadata        Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation  Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payrollRun    PayrollRun            @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  requestedBy   User?                 @relation("RequestedPayrollApprovals", fields: [requestedByUserId], references: [id])
+  approver      User?                 @relation("ReviewedPayrollApprovals", fields: [approverUserId], references: [id])
+  otpChallenges PayrollOtpChallenge[]
+
+  @@index([organisationId])
+  @@index([payrollRunId])
+  @@index([approvalType])
+  @@index([status])
+  @@index([approverUserId])
+  @@index([requestedAt])
+  @@map("payroll_approvals")
+}
+
+model PayrollOtpChallenge {
+  id                String @id @default(uuid())
+  organisationId    String
+  payrollApprovalId String
+  userId            String
+
+  purpose PayrollOtpPurpose
+  status  PayrollOtpStatus  @default(PENDING)
+
+  codeHash String
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(5)
+
+  expiresAt   DateTime
+  verifiedAt  DateTime?
+  cancelledAt DateTime?
+
+  requestedIpAddress String?
+  verifiedIpAddress  String?
+  userAgent          String?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation    Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payrollApproval PayrollApproval @relation(fields: [payrollApprovalId], references: [id], onDelete: Cascade)
+  user            User            @relation("PayrollOtpChallengeUsers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@index([payrollApprovalId])
+  @@index([userId])
+  @@index([purpose])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("payroll_otp_challenges")
+}
+
+model RecruitmentJob {
+  id              String  @id @default(uuid())
+  organisationId  String
+  departmentId    String?
+  createdByUserId String?
+
+  title          String
+  reference      String?
+  description    String?
+  location       String?
+  employmentType String?
+  status         RecruitmentJobStatus @default(OPEN)
+
+  openingDate DateTime?
+  closingDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  department   Department?      @relation(fields: [departmentId], references: [id])
+  createdBy    User?            @relation("CreatedRecruitmentJobs", fields: [createdByUserId], references: [id])
+  applications JobApplication[]
+
+  @@unique([organisationId, reference])
+  @@index([organisationId])
+  @@index([departmentId])
+  @@index([status])
+  @@index([createdByUserId])
+  @@map("recruitment_jobs")
+}
+
+model Candidate {
+  id              String  @id @default(uuid())
+  organisationId  String
+  createdByUserId String?
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+
+  currentCompany String?
+  currentRole    String?
+  location       String?
+  source         String?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation       Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy          User?               @relation("CreatedCandidates", fields: [createdByUserId], references: [id])
+  applications       JobApplication[]
+  documentRecipients DocumentRecipient[]
+
+  @@index([organisationId])
+  @@index([email])
+  @@index([createdByUserId])
+  @@map("candidates")
+}
+
+model JobApplication {
+  id             String @id @default(uuid())
+  organisationId String
+  jobId          String
+  candidateId    String
+
+  status JobApplicationStatus @default(APPLIED)
+
+  appliedAt     DateTime  @default(now())
+  interviewDate DateTime?
+  offerDate     DateTime?
+  decisionDate  DateTime?
+
+  expectedSalary Decimal? @db.Decimal(12, 2)
+  rating         Int?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  job          RecruitmentJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate    Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, candidateId])
+  @@index([organisationId])
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([status])
+  @@map("job_applications")
+}
+
+model LeaveDocument {
+  id             String   @id @default(uuid())
+  organisationId String
+  leaveRequestId String
+  employeeId     String
+  fileName       String
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  storageKey     String
+  createdAt      DateTime @default(now())
+
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([leaveRequestId])
+  @@index([organisationId])
+  @@map("leave_documents")
+}
+
+model LeaveRequest {
+  id               String      @id @default(uuid())
+  organisationId   String
+  employeeId       String
+  leaveType        LeaveType
+  status           LeaveStatus @default(PENDING)
+  startDate        DateTime
+  endDate          DateTime
+  totalDays        Decimal     @db.Decimal(5, 2)
+  reason           String?
+  rejectionNote    String?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  documents    LeaveDocument[]
+  approvedBy   User?           @relation("ApprovedLeaveRequests", fields: [approvedByUserId], references: [id])
+  employee     Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([endDate])
+  @@index([organisationId])
+  @@index([startDate])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+model Organisation {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  email        String?
+  phone        String?
+  website      String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  province     String?
+  country      String?  @default("South Africa")
+  postalCode   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditLogs                     AuditLog[]
+  departments                   Department[]
+  employeeDocuments             EmployeeDocument[]
+  employeeCompensationProfiles  EmployeeCompensationProfile[]
+  employees                     Employee[]
+  payrollRuns                   PayrollRun[]
+  payrollRunItems               PayrollRunItem[]
+  payrollAudits                 PayrollAudit[]
+  payrollAuditFindings          PayrollAuditFinding[]
+  payrollTimelineEvents         PayrollTimelineEvent[]
+  payrollApprovals              PayrollApproval[]
+  payrollOtpChallenges          PayrollOtpChallenge[]
+  recruitmentJobs               RecruitmentJob[]
+  candidates                    Candidate[]
+  jobApplications               JobApplication[]
+  leaveDocuments                LeaveDocument[]
+  leaveRequests                 LeaveRequest[]
+  roles                         Role[]
+  users                         User[]
+  attendanceRecords             AttendanceRecord[]
+  attendanceCorrections         AttendanceCorrectionRequest[]
+  employeeProfileChangeRequests EmployeeProfileChangeRequest[]
+  employeeNotifications         EmployeeNotification[]
+  documentTemplates             DocumentTemplate[]
+  documentTemplateVersions      DocumentTemplateVersion[]
+  organisationBranding          OrganisationBranding?
+  organisationSignature         OrganisationSignature?
+  generatedDocuments            GeneratedDocument[]
+  generatedDocumentVersions     GeneratedDocumentVersion[]
+  documentApprovals             DocumentApproval[]
+  documentRecipients            DocumentRecipient[]
+  performanceTemplates          PerformanceTemplate[]
+  performanceCycles             PerformanceCycle[]
+  performanceReviews            PerformanceReview[]
+  performanceGoals              PerformanceGoal[]
+  performanceDevelopmentPlans   PerformanceDevelopmentPlan[]
+  performanceCompetencies       PerformanceCompetency[]
+
+  standardClockInTime                  String  @default("08:00")
+  standardClockOutTime                 String  @default("17:00")
+  lateClockInThresholdMinutes          Int     @default(15)
+  defaultWorkingHoursPerDay            Int     @default(8)
+  leaveYearStartMonth                  Int     @default(1)
+  defaultAnnualLeaveDays               Int     @default(15)
+  sickLeaveCycleDays                   Int     @default(30)
+  sickLeaveDocumentThresholdDays       Int     @default(2)
+  autoMarkMissedClockOut               Boolean @default(true)
+  attendanceWorkingDays                Int[]   @default([1, 2, 3, 4, 5])
+  attendanceGracePeriodMinutes         Int     @default(0)
+  allowEarlyClockIn                    Boolean @default(true)
+  allowEarlyClockOut                   Boolean @default(true)
+  requireLateAttendanceNote            Boolean @default(false)
+  requireEarlyClockOutNote             Boolean @default(false)
+  managersMayEditAttendance            Boolean @default(false)
+  attendanceCorrectionsRequireApproval Boolean @default(true)
+
+  @@map("organisations")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([permissionId])
+  @@index([roleId])
+  @@map("role_permissions")
+}
+
+model Role {
+  id             String   @id @default(uuid())
+  organisationId String?
+  name           String
+  description    String?
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  organisation    Organisation?    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([roleId])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+model User {
+  id             String     @id @default(uuid())
+  organisationId String
+  email          String
+  passwordHash   String
+  firstName      String
+  lastName       String
+  phone          String?
+  status         UserStatus @default(ACTIVE)
+  lastLoginAt    DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  auditLogs                        AuditLog[]                     @relation("AuditActor")
+  authSessions                     AuthSession[]
+  uploadedEmployeeDocuments        EmployeeDocument[]             @relation("UploadedEmployeeDocuments")
+  createdPayrollRuns               PayrollRun[]                   @relation("CreatedPayrollRuns")
+  finalisedPayrollRuns             PayrollRun[]                   @relation("FinalisedPayrollRuns")
+  analysedPayrollAudits            PayrollAudit[]                 @relation("AnalysedPayrollAudits")
+  acknowledgedPayrollFindings      PayrollAuditFinding[]          @relation("AcknowledgedPayrollFindings")
+  resolvedPayrollFindings          PayrollAuditFinding[]          @relation("ResolvedPayrollFindings")
+  payrollTimelineEvents            PayrollTimelineEvent[]         @relation("PayrollTimelineActors")
+  requestedPayrollApprovals        PayrollApproval[]              @relation("RequestedPayrollApprovals")
+  reviewedPayrollApprovals         PayrollApproval[]              @relation("ReviewedPayrollApprovals")
+  payrollOtpChallenges             PayrollOtpChallenge[]          @relation("PayrollOtpChallengeUsers")
+  createdRecruitmentJobs           RecruitmentJob[]               @relation("CreatedRecruitmentJobs")
+  createdCandidates                Candidate[]                    @relation("CreatedCandidates")
+  employeeProfile                  Employee?
+  approvedLeaveRequests            LeaveRequest[]                 @relation("ApprovedLeaveRequests")
+  requestedAttendanceCorrections   AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionRequesters")
+  reviewedAttendanceCorrections    AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionReviewers")
+  correctedAttendanceRecords       AttendanceRecord[]             @relation("AttendanceRecordCorrectors")
+  requestedProfileChanges          EmployeeProfileChangeRequest[] @relation("ProfileChangeRequesters")
+  reviewedProfileChanges           EmployeeProfileChangeRequest[] @relation("ProfileChangeReviewers")
+  employeeNotifications            EmployeeNotification[]
+  createdDocumentTemplates         DocumentTemplate[]             @relation("CreatedDocumentTemplates")
+  uploadedDocumentTemplateVersions DocumentTemplateVersion[]      @relation("UploadedDocumentTemplateVersions")
+  updatedOrganisationBranding      OrganisationBranding[]         @relation("UpdatedOrganisationBranding")
+  ceoForOrganisations              OrganisationSignature[]        @relation("OrganisationCeo")
+  updatedOrganisationSignatures    OrganisationSignature[]        @relation("UpdatedOrganisationSignature")
+  generatedDocuments               GeneratedDocument[]            @relation("GeneratedDocuments")
+  approvedGeneratedDocuments       GeneratedDocument[]            @relation("ApprovedGeneratedDocuments")
+  publishedGeneratedDocuments      GeneratedDocument[]            @relation("PublishedGeneratedDocuments")
+  generatedDocumentVersions        GeneratedDocumentVersion[]     @relation("GeneratedDocumentVersions")
+  requestedDocumentApprovals       DocumentApproval[]             @relation("RequestedDocumentApprovals")
+  assignedDocumentApprovals        DocumentApproval[]             @relation("AssignedDocumentApprovals")
+  createdDocumentRecipients        DocumentRecipient[]            @relation("CreatedDocumentRecipients")
+  createdPerformanceTemplates      PerformanceTemplate[]          @relation("CreatedPerformanceTemplates")
+  createdPerformanceCycles         PerformanceCycle[]             @relation("CreatedPerformanceCycles")
+  assignedPerformanceReviews       PerformanceReview[]            @relation("PerformanceReviewReviewerUser")
+  finalisedPerformanceReviews      PerformanceReview[]            @relation("FinalisedPerformanceReviews")
+  createdPerformanceGoals          PerformanceGoal[]              @relation("CreatedPerformanceGoals")
+  createdDevelopmentPlans          PerformanceDevelopmentPlan[]   @relation("CreatedDevelopmentPlans")
+  createdPerformanceCompetencies   PerformanceCompetency[]        @relation("CreatedPerformanceCompetencies")
+  userRoles                        UserRole[]
+  organisation                     Organisation                   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, email])
+  @@index([email])
+  @@index([organisationId])
+  @@index([lockedUntil])
+  @@map("users")
+}
+
+model PerformanceTemplate {
+  id              String                    @id @default(uuid())
+  organisationId  String
+  name            String
+  description     String?
+  type            PerformanceAssessmentType
+  status          PerformanceTemplateStatus @default(ACTIVE)
+  anonymous       Boolean                   @default(false)
+  questions       Json
+  createdByUserId String
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User               @relation("CreatedPerformanceTemplates", fields: [createdByUserId], references: [id])
+  cycles       PerformanceCycle[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId, status])
+  @@map("performance_templates")
+}
+
+model PerformanceCycle {
+  id              String                 @id @default(uuid())
+  organisationId  String
+  templateId      String
+  name            String
+  description     String?
+  startDate       DateTime
+  dueDate         DateTime
+  status          PerformanceCycleStatus @default(DRAFT)
+  createdByUserId String
+  launchedAt      DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  template     PerformanceTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  createdBy    User                @relation("CreatedPerformanceCycles", fields: [createdByUserId], references: [id])
+  reviews      PerformanceReview[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId, status, dueDate])
+  @@index([templateId])
+  @@map("performance_cycles")
+}
+
+model PerformanceReview {
+  id                     String                  @id @default(uuid())
+  organisationId         String
+  cycleId                String
+  employeeId             String
+  reviewerUserId         String
+  reviewerEmployeeId     String?
+  reviewerType           PerformanceReviewerType
+  status                 PerformanceReviewStatus @default(ASSIGNED)
+  confidential           Boolean                 @default(false)
+  answers                Json?
+  overallScore           Decimal?                @db.Decimal(5, 2)
+  strengths              String?
+  developmentAreas       String?
+  managerSummary         String?
+  finalOutcome           String?
+  submittedAt            DateTime?
+  finalisedByUserId      String?
+  finalisedAt            DateTime?
+  employeeAcknowledgedAt DateTime?
+  employeeComments       String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  organisation     Organisation                 @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  cycle            PerformanceCycle             @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee         Employee                     @relation("PerformanceReviewSubject", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewerUser     User                         @relation("PerformanceReviewReviewerUser", fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  reviewerEmployee Employee?                    @relation("PerformanceReviewReviewerEmployee", fields: [reviewerEmployeeId], references: [id], onDelete: SetNull)
+  finalisedBy      User?                        @relation("FinalisedPerformanceReviews", fields: [finalisedByUserId], references: [id])
+  goals            PerformanceGoal[]
+  developmentPlans PerformanceDevelopmentPlan[]
+
+  @@unique([cycleId, employeeId, reviewerUserId, reviewerType])
+  @@index([organisationId, status])
+  @@index([employeeId, status])
+  @@index([reviewerUserId, status])
+  @@index([cycleId])
+  @@map("performance_reviews")
+}
+
+model PerformanceGoal {
+  id              String                  @id @default(uuid())
+  organisationId  String
+  employeeId      String
+  reviewId        String?
+  title           String
+  description     String?
+  successMeasure  String?
+  priority        PerformanceGoalPriority @default(MEDIUM)
+  status          PerformanceGoalStatus   @default(NOT_STARTED)
+  progress        Int                     @default(0)
+  targetDate      DateTime
+  completedAt     DateTime?
+  evidence        String?
+  managerComments String?
+  createdByUserId String
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee     Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  review       PerformanceReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  createdBy    User               @relation("CreatedPerformanceGoals", fields: [createdByUserId], references: [id])
+
+  @@index([organisationId, status, targetDate])
+  @@index([employeeId])
+  @@index([reviewId])
+  @@map("performance_goals")
+}
+
+model PerformanceDevelopmentPlan {
+  id              String                @id @default(uuid())
+  organisationId  String
+  employeeId      String
+  reviewId        String?
+  title           String
+  developmentNeed String
+  actionPlan      String
+  supportRequired String?
+  targetDate      DateTime
+  status          DevelopmentPlanStatus @default(PLANNED)
+  progressNotes   String?
+  completedAt     DateTime?
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee     Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  review       PerformanceReview? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  createdBy    User               @relation("CreatedDevelopmentPlans", fields: [createdByUserId], references: [id])
+
+  @@index([organisationId, status, targetDate])
+  @@index([employeeId])
+  @@index([reviewId])
+  @@map("performance_development_plans")
+}
+
+model PerformanceCompetency {
+  id                    String   @id @default(uuid())
+  organisationId        String
+  name                  String
+  description           String?
+  category              String
+  behaviouralIndicators Json?
+  active                Boolean  @default(true)
+  createdByUserId       String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("CreatedPerformanceCompetencies", fields: [createdByUserId], references: [id])
+
+  @@unique([organisationId, name])
+  @@index([organisationId, active])
+  @@map("performance_competencies")
+}
+
+model EmployeeProfileChangeRequest {
+  id                String                     @id @default(uuid())
+  organisationId    String
+  employeeId        String
+  requestedByUserId String
+  field             EmployeeProfileChangeField
+  currentValue      String?
+  requestedValue    String
+  reason            String
+  status            ProfileChangeRequestStatus @default(PENDING)
+  reviewerUserId    String?
+  reviewComments    String?
+  reviewedAt        DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requestedBy  User         @relation("ProfileChangeRequesters", fields: [requestedByUserId], references: [id])
+  reviewer     User?        @relation("ProfileChangeReviewers", fields: [reviewerUserId], references: [id])
+
+  @@index([organisationId])
+  @@index([employeeId])
+  @@index([status])
+  @@map("employee_profile_change_requests")
+}
+
+model EmployeeNotification {
+  id             String                       @id @default(uuid())
+  organisationId String
+  userId         String
+  category       EmployeeNotificationCategory
+  title          String
+  message        String
+  href           String?
+  readAt         DateTime?
+  createdAt      DateTime                     @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("employee_notifications")
+}
+
+model AttendanceRecord {
+  id                        String           @id @default(uuid())
+  organisationId            String
+  employeeId                String
+  clockInAt                 DateTime
+  clockOutAt                DateTime?
+  status                    AttendanceStatus @default(CLOCKED_IN)
+  notes                     String?
+  expectedMinutes           Int              @default(0)
+  workedMinutes             Int              @default(0)
+  lateMinutes               Int              @default(0)
+  earlyClockOutMinutes      Int              @default(0)
+  calculatedOvertimeMinutes Int              @default(0)
+  approvedOvertimeMinutes   Int              @default(0)
+  payableOvertimeMinutes    Int              @default(0)
+  policyResult              String?
+  correctedAt               DateTime?
+  correctedByUserId         String?
+  correctionOriginalValues  Json?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  organisation       Organisation                  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee           Employee                      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  correctedBy        User?                         @relation("AttendanceRecordCorrectors", fields: [correctedByUserId], references: [id])
+  correctionRequests AttendanceCorrectionRequest[]
+
+  @@index([organisationId])
+  @@index([employeeId])
+  @@index([clockInAt])
+  @@index([status])
+  @@map("attendance_records")
+}
+
+model AttendanceCorrectionRequest {
+  id                  String                     @id @default(uuid())
+  organisationId      String
+  employeeId          String
+  attendanceRecordId  String?
+  requestedByUserId   String
+  requestedDate       DateTime                   @db.Date
+  requestedClockInAt  DateTime?
+  requestedClockOutAt DateTime?
+  reasonCategory      AttendanceCorrectionReason
+  explanation         String
+  status              AttendanceCorrectionStatus @default(PENDING)
+  reviewerUserId      String?
+  reviewedAt          DateTime?
+  reviewComments      String?
+  originalValues      Json?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  organisation     Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  employee         Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  attendanceRecord AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id], onDelete: SetNull)
+  requestedBy      User              @relation("AttendanceCorrectionRequesters", fields: [requestedByUserId], references: [id])
+  reviewer         User?             @relation("AttendanceCorrectionReviewers", fields: [reviewerUserId], references: [id])
+
+  @@index([organisationId])
+  @@index([employeeId])
+  @@index([attendanceRecordId])
+  @@index([status])
+  @@index([requestedDate])
+  @@map("attendance_correction_requests")
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  DISABLED
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+  RESIGNED
+  SUSPENDED
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  FAMILY_RESPONSIBILITY
+  MATERNITY
+  PATERNITY
+  STUDY
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum EmployeeDocumentCategory {
+  CONTRACT
+  ID_DOCUMENT
+  PASSPORT
+  CERTIFICATE
+  MEDICAL
+  TRAINING
+  POLICY
+  DISCIPLINARY
+  PAYSLIP
+  OTHER
+}
+
+enum DocumentTemplateCategory {
+  EMPLOYMENT_CONTRACT
+  CONTRACT_AMENDMENT
+  OFFER_LETTER
+  CONFIRMATION_OF_EMPLOYMENT
+  SALARY_CONFIRMATION
+  SERVICE_CERTIFICATE
+  SALARY_ADJUSTMENT
+  PROMOTION
+  DISCIPLINARY_NOTICE
+  WARNING_LETTER
+  DISCIPLINARY_OUTCOME
+  LEAVE_CONFIRMATION
+  UNPAID_LEAVE_AGREEMENT
+  TERMINATION
+  RESIGNATION_ACKNOWLEDGEMENT
+  RETRENCHMENT_NOTICE
+  POLICY_ACKNOWLEDGEMENT
+  CONFIDENTIALITY_AGREEMENT
+  PAYSLIP
+  REFERENCE_LETTER
+  GENERAL_HR_LETTER
+  CUSTOM
+}
+
+enum DocumentTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum DocumentSignatureMode {
+  NONE
+  AUTOMATIC
+  CEO_APPROVAL
+  MANUAL
+}
+
+enum OrganisationSignatureStatus {
+  NOT_CONFIGURED
+  ACTIVE
+  DISABLED
+}
+
+enum GeneratedDocumentStatus {
+  DRAFT
+  GENERATED_FOR_REVIEW
+  PENDING_CEO_APPROVAL
+  APPROVED
+  SIGNED
+  PUBLISHED
+  REJECTED
+  CANCELLED
+  FAILED
+}
+
+enum DocumentSignatureStatus {
+  NOT_REQUIRED
+  UNSIGNED
+  PENDING_APPROVAL
+  SIGNED
+}
+
+enum DocumentApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  CLOCKED_IN
+  CLOCKED_OUT
+  MISSED_CLOCK_OUT
+}
+
+enum AttendanceCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AttendanceCorrectionReason {
+  FORGOT_CLOCK_IN
+  FORGOT_CLOCK_OUT
+  INCORRECT_TIME
+  TECHNICAL_PROBLEM
+  APPROVED_OFF_SITE_WORK
+  OTHER
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  CALCULATED
+  AI_AUDITED
+  HR_REVIEWED
+  FINANCE_REVIEWED
+  PENDING_CEO_APPROVAL
+  CEO_APPROVED
+  PAYMENT_PROCESSING
+  PAID
+  COMPLETED
+  FINALISED
+  REJECTED
+  CANCELLED
+}
+
+enum PayrollAuditRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PayrollAuditSeverity {
+  INFO
+  WARNING
+  HIGH
+  CRITICAL
+}
+
+enum PayrollAuditFindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum PayrollApprovalType {
+  HR_REVIEW
+  FINANCE_REVIEW
+  CEO_APPROVAL
+}
+
+enum PayrollApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum PayrollOtpPurpose {
+  CEO_PAYROLL_APPROVAL
+  PAYROLL_RELEASE
+  SENSITIVE_DOCUMENT_DOWNLOAD
+}
+
+enum PayrollOtpStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  LOCKED
+  CANCELLED
+}
+
+enum RecruitmentJobStatus {
+  OPEN
+  ON_HOLD
+  CLOSED
+}
+
+enum JobApplicationStatus {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  VIEW
+  DOWNLOAD
+  UPLOAD
+  APPROVE
+  REJECT
+}
+
+enum EmployeeProfileChangeField {
+  PERSONAL_EMAIL
+  PHONE
+  PREFERRED_NAME
+  RESIDENTIAL_ADDRESS
+  EMERGENCY_CONTACT_NAME
+  EMERGENCY_CONTACT_PHONE
+  EMERGENCY_CONTACT_RELATION
+  BANK_NAME
+  BANK_ACCOUNT_NUMBER
+}
+
+enum ProfileChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum EmployeeNotificationCategory {
+  LEAVE
+  ATTENDANCE
+  PAYSLIP
+  DOCUMENT
+  PROFILE
+  ANNOUNCEMENT
+  ACTION_REQUIRED
+  GENERAL
+  PERFORMANCE
+}
+
+enum PerformanceAssessmentType {
+  PROBATION
+  ANNUAL
+  QUARTERLY
+  SELF_ASSESSMENT
+  MANAGER_ASSESSMENT
+  PEER_ASSESSMENT
+  REVIEW_360
+  CLINICAL_COMPETENCY
+  TRAINING_EVALUATION
+  PERFORMANCE_IMPROVEMENT
+  CUSTOM
+}
+
+enum PerformanceTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PerformanceCycleStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum PerformanceReviewerType {
+  SELF
+  MANAGER
+  PEER
+  DIRECT_REPORT
+  DEPARTMENT_HEAD
+  EXTERNAL
+}
+
+enum PerformanceReviewStatus {
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED
+  MANAGER_REVIEW
+  AWAITING_ACKNOWLEDGEMENT
+  COMPLETED
+  CANCELLED
+}
+
+enum PerformanceGoalPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PerformanceGoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum DevelopmentPlanStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
