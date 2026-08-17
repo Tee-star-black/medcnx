@@ -1,4 +1,6 @@
 -- MedCNX workforce hierarchy foundation.
+-- Cross-model integrity is enforced with triggers because the hierarchy models live
+-- in a separate Prisma schema file without relation fields on legacy core models.
 
 CREATE TABLE "department_structures" (
   "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
@@ -32,8 +34,7 @@ CREATE TABLE "positions" (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "positions_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "positions_approved_headcount_nonnegative" CHECK ("approvedHeadcount" >= 0),
-  CONSTRAINT "positions_organisationId_code_key" UNIQUE ("organisationId", "code"),
-  CONSTRAINT "positions_id_organisationId_key" UNIQUE ("id", "organisationId")
+  CONSTRAINT "positions_organisationId_code_key" UNIQUE ("organisationId", "code")
 );
 
 CREATE INDEX "positions_organisationId_idx" ON "positions"("organisationId");
@@ -58,33 +59,6 @@ CREATE INDEX "employee_position_assignments_organisationId_idx" ON "employee_pos
 CREATE INDEX "employee_position_assignments_employeeId_idx" ON "employee_position_assignments"("employeeId");
 CREATE INDEX "employee_position_assignments_positionId_idx" ON "employee_position_assignments"("positionId");
 CREATE INDEX "employee_position_assignments_effectiveFrom_idx" ON "employee_position_assignments"("effectiveFrom");
-CREATE UNIQUE INDEX "employee_position_assignments_one_active_per_employee" ON "employee_position_assignments"("employeeId") WHERE "effectiveTo" IS NULL;
-
-ALTER TABLE "department_structures"
-  ADD CONSTRAINT "department_structures_organisationId_fkey"
-  FOREIGN KEY ("organisationId") REFERENCES "organisations"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "department_structures_department_tenant_fkey"
-  FOREIGN KEY ("departmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "department_structures_parent_tenant_fkey"
-  FOREIGN KEY ("parentDepartmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "department_structures_head_tenant_fkey"
-  FOREIGN KEY ("headEmployeeId", "organisationId") REFERENCES "employees"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "positions"
-  ADD CONSTRAINT "positions_organisationId_fkey"
-  FOREIGN KEY ("organisationId") REFERENCES "organisations"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "positions_department_tenant_fkey"
-  FOREIGN KEY ("departmentId", "organisationId") REFERENCES "departments"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "employee_position_assignments"
-  ADD CONSTRAINT "employee_position_assignments_organisationId_fkey"
-  FOREIGN KEY ("organisationId") REFERENCES "organisations"("id") ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT "employee_position_assignments_employee_tenant_fkey"
-  FOREIGN KEY ("employeeId", "organisationId") REFERENCES "employees"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "employee_position_assignments_position_tenant_fkey"
-  FOREIGN KEY ("positionId", "organisationId") REFERENCES "positions"("id", "organisationId") ON DELETE RESTRICT ON UPDATE CASCADE,
-  ADD CONSTRAINT "employee_position_assignments_actor_fkey"
-  FOREIGN KEY ("assignedByUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 CREATE OR REPLACE FUNCTION medcnx_validate_department_structure()
 RETURNS trigger
@@ -93,8 +67,30 @@ AS $$
 DECLARE
   found_cycle BOOLEAN;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM "organisations" o WHERE o."id" = NEW."organisationId"
+  ) THEN
+    RAISE EXCEPTION 'Organisation not found for department structure.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM "departments" d
+    WHERE d."id" = NEW."departmentId"
+      AND d."organisationId" = NEW."organisationId"
+  ) THEN
+    RAISE EXCEPTION 'Department must belong to the same organisation.';
+  END IF;
+
   IF NEW."parentDepartmentId" = NEW."departmentId" THEN
     RAISE EXCEPTION 'A department cannot be its own parent.';
+  END IF;
+
+  IF NEW."parentDepartmentId" IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM "departments" d
+    WHERE d."id" = NEW."parentDepartmentId"
+      AND d."organisationId" = NEW."organisationId"
+  ) THEN
+    RAISE EXCEPTION 'Parent department must belong to the same organisation.';
   END IF;
 
   IF NEW."headEmployeeId" IS NOT NULL AND NOT EXISTS (
@@ -135,3 +131,139 @@ $$;
 CREATE TRIGGER "department_structures_validate"
 BEFORE INSERT OR UPDATE ON "department_structures"
 FOR EACH ROW EXECUTE FUNCTION medcnx_validate_department_structure();
+
+CREATE OR REPLACE FUNCTION medcnx_validate_position()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM "organisations" o WHERE o."id" = NEW."organisationId"
+  ) THEN
+    RAISE EXCEPTION 'Organisation not found for position.';
+  END IF;
+
+  IF NEW."departmentId" IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM "departments" d
+    WHERE d."id" = NEW."departmentId"
+      AND d."organisationId" = NEW."organisationId"
+  ) THEN
+    RAISE EXCEPTION 'Position department must belong to the same organisation.';
+  END IF;
+
+  NEW."updatedAt" = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER "positions_validate"
+BEFORE INSERT OR UPDATE ON "positions"
+FOR EACH ROW EXECUTE FUNCTION medcnx_validate_position();
+
+CREATE OR REPLACE FUNCTION medcnx_validate_employee_position_assignment()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM "employees" e
+    WHERE e."id" = NEW."employeeId"
+      AND e."organisationId" = NEW."organisationId"
+      AND e."employmentStatus" NOT IN ('TERMINATED', 'RESIGNED')
+  ) THEN
+    RAISE EXCEPTION 'Position assignment employee must be active and in the same organisation.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM "positions" p
+    WHERE p."id" = NEW."positionId"
+      AND p."organisationId" = NEW."organisationId"
+      AND p."active" = true
+  ) THEN
+    RAISE EXCEPTION 'Position assignment must reference an active position in the same organisation.';
+  END IF;
+
+  IF NEW."assignedByUserId" IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM "users" u
+    WHERE u."id" = NEW."assignedByUserId"
+      AND u."organisationId" = NEW."organisationId"
+  ) THEN
+    RAISE EXCEPTION 'Position assignment actor must belong to the same organisation.';
+  END IF;
+
+  IF NEW."effectiveTo" IS NULL AND EXISTS (
+    SELECT 1 FROM "employee_position_assignments" a
+    WHERE a."employeeId" = NEW."employeeId"
+      AND a."organisationId" = NEW."organisationId"
+      AND a."effectiveTo" IS NULL
+      AND a."id" <> NEW."id"
+  ) THEN
+    RAISE EXCEPTION 'Employee already has an active position assignment.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER "employee_position_assignments_validate"
+BEFORE INSERT OR UPDATE ON "employee_position_assignments"
+FOR EACH ROW EXECUTE FUNCTION medcnx_validate_employee_position_assignment();
+
+CREATE OR REPLACE FUNCTION medcnx_guard_department_hierarchy_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "department_structures" ds
+    WHERE ds."departmentId" = OLD."id" OR ds."parentDepartmentId" = OLD."id"
+  ) OR EXISTS (
+    SELECT 1 FROM "positions" p WHERE p."departmentId" = OLD."id"
+  ) THEN
+    RAISE EXCEPTION 'Department is referenced by workforce hierarchy and cannot be deleted.';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER "departments_guard_hierarchy_delete"
+BEFORE DELETE ON "departments"
+FOR EACH ROW EXECUTE FUNCTION medcnx_guard_department_hierarchy_delete();
+
+CREATE OR REPLACE FUNCTION medcnx_guard_employee_hierarchy_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "department_structures" ds WHERE ds."headEmployeeId" = OLD."id"
+  ) OR EXISTS (
+    SELECT 1 FROM "employee_position_assignments" a WHERE a."employeeId" = OLD."id"
+  ) THEN
+    RAISE EXCEPTION 'Employee is referenced by workforce hierarchy history and cannot be deleted.';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER "employees_guard_hierarchy_delete"
+BEFORE DELETE ON "employees"
+FOR EACH ROW EXECUTE FUNCTION medcnx_guard_employee_hierarchy_delete();
+
+CREATE OR REPLACE FUNCTION medcnx_guard_position_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "employee_position_assignments" a WHERE a."positionId" = OLD."id"
+  ) THEN
+    RAISE EXCEPTION 'Position has assignment history and cannot be deleted.';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER "positions_guard_delete"
+BEFORE DELETE ON "positions"
+FOR EACH ROW EXECUTE FUNCTION medcnx_guard_position_delete();
