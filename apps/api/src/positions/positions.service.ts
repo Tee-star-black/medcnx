@@ -4,12 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AuditAction, EmploymentStatus } from '@prisma/client';
+import {
+  AuditAction,
+  EmploymentStatus,
+  RecruitmentJobStatus,
+} from '@prisma/client';
 import { AccessScopeService } from '../auth/access-scope.service';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
 import { AssignPositionDto } from './dto/assign-position.dto';
 import { CreatePositionDto } from './dto/create-position.dto';
+import { CreatePositionRecruitmentJobDto } from './dto/create-position-recruitment-job.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 
 @Injectable()
@@ -45,13 +50,14 @@ export class PositionsService {
 
     return Promise.all(
       positions.map(async (position) => {
-        const currentHeadcount = await this.prisma.employeePositionAssignment.count({
-          where: {
-            organisationId: user.organisationId,
-            positionId: position.id,
-            effectiveTo: null,
-          },
-        });
+        const currentHeadcount =
+          await this.prisma.employeePositionAssignment.count({
+            where: {
+              organisationId: user.organisationId,
+              positionId: position.id,
+              effectiveTo: null,
+            },
+          });
 
         return {
           ...position,
@@ -65,18 +71,148 @@ export class PositionsService {
     );
   }
 
-  async findOne(user: CurrentUser, positionId: string) {
-    const position = await this.getPosition(user, positionId);
-    const currentAssignments = await this.prisma.employeePositionAssignment.findMany({
+  async getVacancyPlan(user: CurrentUser) {
+    const positions = await this.prisma.position.findMany({
       where: {
         organisationId: user.organisationId,
-        positionId,
-        effectiveTo: null,
+        active: true,
       },
-      orderBy: { effectiveFrom: 'asc' },
+      orderBy: { title: 'asc' },
     });
 
-    const employeeIds = currentAssignments.map((assignment) => assignment.employeeId);
+    const positionIds = positions.map((position) => position.id);
+    const [assignments, recruitmentLinks] = await Promise.all([
+      positionIds.length
+        ? this.prisma.employeePositionAssignment.findMany({
+            where: {
+              organisationId: user.organisationId,
+              positionId: { in: positionIds },
+              effectiveTo: null,
+            },
+            select: { positionId: true },
+          })
+        : [],
+      positionIds.length
+        ? this.prisma.recruitmentPositionLink.findMany({
+            where: {
+              organisationId: user.organisationId,
+              positionId: { in: positionIds },
+            },
+          })
+        : [],
+    ]);
+
+    const jobIds = recruitmentLinks.map((link) => link.recruitmentJobId);
+    const activeJobs = jobIds.length
+      ? await this.prisma.recruitmentJob.findMany({
+          where: {
+            organisationId: user.organisationId,
+            id: { in: jobIds },
+            status: {
+              in: [RecruitmentJobStatus.OPEN, RecruitmentJobStatus.ON_HOLD],
+            },
+          },
+          select: { id: true, status: true },
+        })
+      : [];
+
+    const activeJobIds = new Set(activeJobs.map((job) => job.id));
+    const occupiedByPosition = new Map<string, number>();
+    for (const assignment of assignments) {
+      occupiedByPosition.set(
+        assignment.positionId,
+        (occupiedByPosition.get(assignment.positionId) ?? 0) + 1,
+      );
+    }
+
+    const recruitingByPosition = new Map<string, number>();
+    for (const link of recruitmentLinks) {
+      if (!activeJobIds.has(link.recruitmentJobId)) continue;
+      recruitingByPosition.set(
+        link.positionId,
+        (recruitingByPosition.get(link.positionId) ?? 0) + link.plannedOpenings,
+      );
+    }
+
+    const departmentIds = [
+      ...new Set(positions.map((position) => position.departmentId).filter(Boolean)),
+    ] as string[];
+    const departments = departmentIds.length
+      ? await this.prisma.department.findMany({
+          where: {
+            organisationId: user.organisationId,
+            id: { in: departmentIds },
+          },
+          select: { id: true, name: true },
+        })
+      : [];
+    const departmentById = new Map(
+      departments.map((department) => [department.id, department]),
+    );
+
+    const rows = positions.map((position) => {
+      const currentHeadcount = occupiedByPosition.get(position.id) ?? 0;
+      const vacancies = Math.max(position.approvedHeadcount - currentHeadcount, 0);
+      const recruitingOpenings = recruitingByPosition.get(position.id) ?? 0;
+      const unplannedVacancies = Math.max(vacancies - recruitingOpenings, 0);
+
+      return {
+        ...position,
+        department: position.departmentId
+          ? departmentById.get(position.departmentId) ?? null
+          : null,
+        currentHeadcount,
+        vacancies,
+        recruitingOpenings,
+        unplannedVacancies,
+        staffingStatus:
+          vacancies === 0
+            ? 'FULLY_STAFFED'
+            : unplannedVacancies === 0
+              ? 'RECRUITMENT_IN_PROGRESS'
+              : 'VACANCY_UNPLANNED',
+      };
+    });
+
+    return {
+      totals: {
+        approvedHeadcount: rows.reduce(
+          (total, row) => total + row.approvedHeadcount,
+          0,
+        ),
+        currentHeadcount: rows.reduce(
+          (total, row) => total + row.currentHeadcount,
+          0,
+        ),
+        vacancies: rows.reduce((total, row) => total + row.vacancies, 0),
+        recruitingOpenings: rows.reduce(
+          (total, row) => total + row.recruitingOpenings,
+          0,
+        ),
+        unplannedVacancies: rows.reduce(
+          (total, row) => total + row.unplannedVacancies,
+          0,
+        ),
+      },
+      positions: rows,
+    };
+  }
+
+  async findOne(user: CurrentUser, positionId: string) {
+    const position = await this.getPosition(user, positionId);
+    const currentAssignments =
+      await this.prisma.employeePositionAssignment.findMany({
+        where: {
+          organisationId: user.organisationId,
+          positionId,
+          effectiveTo: null,
+        },
+        orderBy: { effectiveFrom: 'asc' },
+      });
+
+    const employeeIds = currentAssignments.map(
+      (assignment) => assignment.employeeId,
+    );
     const employees = employeeIds.length
       ? await this.prisma.employee.findMany({
           where: {
@@ -97,7 +233,10 @@ export class PositionsService {
     return {
       ...position,
       currentHeadcount: currentAssignments.length,
-      vacancies: Math.max(position.approvedHeadcount - currentAssignments.length, 0),
+      vacancies: Math.max(
+        position.approvedHeadcount - currentAssignments.length,
+        0,
+      ),
       employees,
     };
   }
@@ -215,6 +354,33 @@ export class PositionsService {
       );
     }
 
+    const openRecruitmentLinks =
+      await this.prisma.recruitmentPositionLink.findMany({
+        where: {
+          organisationId: user.organisationId,
+          positionId,
+        },
+        select: { recruitmentJobId: true },
+      });
+    const linkedJobIds = openRecruitmentLinks.map((link) => link.recruitmentJobId);
+    const openRecruitment = linkedJobIds.length
+      ? await this.prisma.recruitmentJob.count({
+          where: {
+            organisationId: user.organisationId,
+            id: { in: linkedJobIds },
+            status: {
+              in: [RecruitmentJobStatus.OPEN, RecruitmentJobStatus.ON_HOLD],
+            },
+          },
+        })
+      : 0;
+
+    if (openRecruitment > 0) {
+      throw new ConflictException(
+        'Cannot archive a position while recruitment is still open for it.',
+      );
+    }
+
     const archived = await this.prisma.position.update({
       where: { id: positionId },
       data: { active: false },
@@ -233,6 +399,143 @@ export class PositionsService {
     });
 
     return archived;
+  }
+
+  async createRecruitmentJob(
+    user: CurrentUser,
+    positionId: string,
+    dto: CreatePositionRecruitmentJobDto,
+  ) {
+    const position = await this.getPosition(user, positionId);
+    if (!position.active) throw new BadRequestException('Position is archived.');
+
+    const currentHeadcount = await this.prisma.employeePositionAssignment.count({
+      where: {
+        organisationId: user.organisationId,
+        positionId,
+        effectiveTo: null,
+      },
+    });
+    const vacancies = Math.max(position.approvedHeadcount - currentHeadcount, 0);
+    if (vacancies === 0) {
+      throw new ConflictException('This position has no approved vacancies.');
+    }
+
+    const existingLinks = await this.prisma.recruitmentPositionLink.findMany({
+      where: {
+        organisationId: user.organisationId,
+        positionId,
+      },
+    });
+    const linkedJobIds = existingLinks.map((link) => link.recruitmentJobId);
+    const activeJobs = linkedJobIds.length
+      ? await this.prisma.recruitmentJob.findMany({
+          where: {
+            organisationId: user.organisationId,
+            id: { in: linkedJobIds },
+            status: {
+              in: [RecruitmentJobStatus.OPEN, RecruitmentJobStatus.ON_HOLD],
+            },
+          },
+          select: { id: true },
+        })
+      : [];
+    const activeJobIds = new Set(activeJobs.map((job) => job.id));
+    const alreadyRecruiting = existingLinks
+      .filter((link) => activeJobIds.has(link.recruitmentJobId))
+      .reduce((total, link) => total + link.plannedOpenings, 0);
+    const remainingVacancies = Math.max(vacancies - alreadyRecruiting, 0);
+    const plannedOpenings = dto.plannedOpenings ?? 1;
+
+    if (plannedOpenings > remainingVacancies) {
+      throw new ConflictException(
+        `Only ${remainingVacancies} unplanned approved vacancy${remainingVacancies === 1 ? '' : 'ies'} remain for this position.`,
+      );
+    }
+
+    if (dto.reference) {
+      const duplicateReference = await this.prisma.recruitmentJob.findFirst({
+        where: {
+          organisationId: user.organisationId,
+          reference: dto.reference.trim(),
+        },
+        select: { id: true },
+      });
+      if (duplicateReference) {
+        throw new ConflictException(
+          'A recruitment job with this reference already exists.',
+        );
+      }
+    }
+
+    const openingDate = dto.openingDate ? new Date(dto.openingDate) : new Date();
+    const closingDate = dto.closingDate ? new Date(dto.closingDate) : null;
+    if (closingDate && closingDate < openingDate) {
+      throw new BadRequestException(
+        'Recruitment closing date cannot precede opening date.',
+      );
+    }
+
+    const result = await this.prisma.$transaction(async (transaction) => {
+      const job = await transaction.recruitmentJob.create({
+        data: {
+          organisationId: user.organisationId,
+          departmentId: position.departmentId,
+          createdByUserId: user.id,
+          title: position.title,
+          reference: dto.reference?.trim(),
+          description: dto.description?.trim() ?? position.description,
+          location: dto.location?.trim(),
+          employmentType: position.employmentCategory,
+          status: RecruitmentJobStatus.OPEN,
+          openingDate,
+          closingDate,
+        },
+      });
+
+      const link = await transaction.recruitmentPositionLink.create({
+        data: {
+          organisationId: user.organisationId,
+          recruitmentJobId: job.id,
+          positionId: position.id,
+          plannedOpenings,
+        },
+      });
+
+      await transaction.auditLog.create({
+        data: {
+          organisationId: user.organisationId,
+          actorUserId: user.id,
+          action: AuditAction.CREATE,
+          entity: 'RecruitmentPositionLink',
+          entityId: link.id,
+          message: `Recruitment opened for position ${position.title}.`,
+          metadata: {
+            positionId: position.id,
+            positionCode: position.code,
+            recruitmentJobId: job.id,
+            plannedOpenings,
+            vacanciesAtCreation: vacancies,
+            alreadyRecruiting,
+          },
+        },
+      });
+
+      return { job, link };
+    });
+
+    return {
+      ...result,
+      position,
+      vacancySnapshot: {
+        approvedHeadcount: position.approvedHeadcount,
+        currentHeadcount,
+        vacancies,
+        alreadyRecruiting,
+        plannedOpenings,
+        remainingUnplannedVacancies: remainingVacancies - plannedOpenings,
+      },
+    };
   }
 
   async assignEmployee(
@@ -259,12 +562,17 @@ export class PositionsService {
       employee.employmentStatus === EmploymentStatus.TERMINATED ||
       employee.employmentStatus === EmploymentStatus.RESIGNED
     ) {
-      throw new BadRequestException('Inactive employees cannot be assigned a position.');
+      throw new BadRequestException(
+        'Inactive employees cannot be assigned a position.',
+      );
     }
 
     const position = await this.getPosition(user, dto.positionId);
     if (!position.active) throw new BadRequestException('Position is archived.');
-    if (position.departmentId && position.departmentId !== employee.departmentId) {
+    if (
+      position.departmentId &&
+      position.departmentId !== employee.departmentId
+    ) {
       throw new BadRequestException(
         'Employee must be transferred to the position department before assignment.',
       );
@@ -272,7 +580,9 @@ export class PositionsService {
 
     const effectiveDate = new Date(dto.effectiveDate);
     if (Number.isNaN(effectiveDate.getTime())) {
-      throw new BadRequestException('A valid position effective date is required.');
+      throw new BadRequestException(
+        'A valid position effective date is required.',
+      );
     }
 
     const current = await this.prisma.employeePositionAssignment.findFirst({
@@ -340,7 +650,8 @@ export class PositionsService {
             reason: dto.reason?.trim() ?? null,
             previousPositionId: previousPosition?.id ?? null,
             previousPositionCode: previousPosition?.code ?? null,
-            previousPositionTitle: previousPosition?.title ?? employee.jobTitle,
+            previousPositionTitle:
+              previousPosition?.title ?? employee.jobTitle,
             nextPositionId: position.id,
             nextPositionCode: position.code,
             nextPositionTitle: position.title,
