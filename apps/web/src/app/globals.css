@@ -1,0 +1,1194 @@
+@import "tailwindcss";
+
+:root {
+  --background: #edf2f4;
+  --bg: #edf2f4;
+  --surface: #ffffff;
+  --surface-soft: #f5f8f9;
+  --surface-muted: #dce5e8;
+  --surface-strong: #082938;
+
+  --text: #0a2634;
+  --text-soft: #294754;
+  --muted: #49636e;
+  --muted-soft: #657b84;
+
+  --border: #ccd8dc;
+  --border-strong: #9eb1b9;
+
+  --accent: #007c91;
+  --accent-hover: #005f70;
+  --accent-soft: #dceff2;
+  --accent-ring: rgba(11, 100, 119, 0.22);
+  --brand-navy: #102a3a;
+  --brand-cyan: #0b6477;
+  --brand-mint: #4f9188;
+  --accent-text: #ffffff;
+
+  --shadow-xs: 0 1px 2px rgba(16, 42, 58, 0.04);
+  --shadow-sm: 0 4px 12px rgba(16, 42, 58, 0.05);
+  --shadow-md: 0 12px 30px rgba(16, 42, 58, 0.08);
+  --shadow-float: 0 16px 40px rgba(16, 42, 58, 0.1);
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+
+  --danger-bg: #dc2626;
+  --danger-text: #ffffff;
+  --danger-border: #991b1b;
+
+  --success-bg: #059669;
+  --success-text: #ffffff;
+  --success-border: #047857;
+
+  --warning-bg: #f59e0b;
+  --warning-text: #111827;
+  --warning-border: #b45309;
+
+  --info-bg: #2563eb;
+  --info-text: #ffffff;
+  --info-border: #1d4ed8;
+
+  --inverse-bg: #111827;
+  --inverse-surface: rgba(255, 255, 255, 0.08);
+  --inverse-text: #ffffff;
+  --inverse-muted: rgba(255, 255, 255, 0.68);
+  --inverse-border: rgba(255, 255, 255, 0.16);
+}
+
+.dark {
+  --background: #071218;
+  --bg: #071218;
+  --surface: #0d1b23;
+  --surface-soft: #13252e;
+  --surface-muted: #20353f;
+  --surface-strong: #ffffff;
+
+  --text: #f8fafc;
+  --text-soft: #cbd5e1;
+  --muted: #94a3b8;
+  --muted-soft: #64748b;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  --accent: #6dc7d4;
+  --accent-hover: #8bd7e1;
+  --accent-soft: #16323a;
+  --accent-ring: rgba(109, 199, 212, 0.24);
+  --brand-navy: #e4edf1;
+  --brand-cyan: #6dc7d4;
+  --brand-mint: #78b8ad;
+  --accent-text: #071218;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.16);
+  --shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.3);
+
+  --danger-bg: #991b1b;
+  --danger-text: #ffffff;
+  --danger-border: #ef4444;
+
+  --success-bg: #047857;
+  --success-text: #ffffff;
+  --success-border: #34d399;
+
+  --warning-bg: #d97706;
+  --warning-text: #ffffff;
+  --warning-border: #fbbf24;
+
+  --info-bg: #1d4ed8;
+  --info-text: #ffffff;
+  --info-border: #60a5fa;
+
+  --inverse-bg: #ffffff;
+  --inverse-surface: rgba(15, 23, 42, 0.06);
+  --inverse-text: #111827;
+  --inverse-muted: rgba(15, 23, 42, 0.68);
+  --inverse-border: rgba(15, 23, 42, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.control {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  padding: 0.7rem 0.875rem;
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  outline: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.control::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.control:focus {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent);
+}
+
+html {
+  min-height: 100%;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    "Segoe UI Variable",
+    "Aptos Display",
+    "Inter",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.58;
+  letter-spacing: -0.004em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
+}
+
+body,
+div,
+section,
+aside,
+main,
+header,
+footer,
+nav,
+article,
+button,
+input,
+select,
+textarea,
+a {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease,
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+input,
+select,
+textarea {
+  color: var(--text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-soft);
+}
+
+input[type="date"] {
+  color-scheme: light;
+}
+
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+::selection {
+  background: var(--text);
+  color: var(--bg);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-muted);
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Reusable theme utility classes */
+.med-page {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.med-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.med-card-soft {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.med-panel-dark {
+  border: 1px solid var(--inverse-border);
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+}
+
+.med-muted {
+  color: var(--muted);
+}
+
+.med-border {
+  border-color: var(--border);
+}
+
+.med-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  outline: none;
+}
+
+.med-input:focus {
+  border-color: var(--text);
+}
+
+.med-button-primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.med-button-primary:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.med-button-secondary {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.med-button-secondary:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+button,
+input,
+select,
+textarea {
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+.med-card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.med-card-soft,
+.med-panel-dark {
+  border-radius: var(--radius-md);
+}
+
+.med-input,
+.med-button-primary,
+.med-button-secondary {
+  border-radius: var(--radius-sm);
+}
+
+.med-button-primary:hover {
+  background: var(--accent-hover);
+  color: var(--accent-text);
+  transform: translateY(-1px);
+}
+
+/* Product-wide foundation for both modern token-based pages and legacy pages. */
+.app-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  background-color: var(--background);
+  background-image:
+    linear-gradient(rgba(0, 124, 145, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 124, 145, 0.045) 1px, transparent 1px);
+  background-position: -1px -1px;
+  background-size: 32px 32px;
+  color: var(--text);
+}
+
+.dark .app-shell {
+  background: var(--background);
+}
+
+.clinical-sidebar {
+  --surface: #082938;
+  --surface-soft: #103746;
+  --surface-muted: #194654;
+  --text: #f5fbfc;
+  --text-soft: #d8e7eb;
+  --muted: #b4cbd2;
+  --muted-soft: #91adb6;
+  --border: #294b58;
+  --border-strong: #476875;
+  --accent: #5bd0de;
+  --accent-hover: #7cdae5;
+  --accent-soft: #123f4e;
+  --accent-text: #062631;
+  color-scheme: dark;
+  background-image:
+    linear-gradient(rgba(91, 208, 222, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 208, 222, 0.045) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.clinical-sidebar::after {
+  position: absolute;
+  right: -1px;
+  bottom: 0;
+  width: 3px;
+  height: 22%;
+  content: "";
+  background: var(--accent);
+}
+
+.clinical-commandbar {
+  background-color: var(--surface);
+}
+
+.clinical-commandbar::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  width: 12rem;
+  height: 2px;
+  content: "";
+  background: var(--accent);
+}
+
+.employee-commandbar {
+  background-color: var(--surface);
+}
+
+.employee-commandbar::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  width: 18%;
+  min-width: 9rem;
+  height: 3px;
+  content: "";
+  background: var(--accent);
+}
+
+.clinical-page-header {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 4px 4px 0 rgba(8, 41, 56, 0.04);
+}
+
+.clinical-page-header::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 72px;
+  height: 72px;
+  content: "";
+  pointer-events: none;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: var(--accent-soft);
+}
+
+.clinical-page-header::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  content: "";
+  background: var(--accent);
+}
+
+.app-shell::before {
+  position: fixed;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  width: min(44vw, 760px);
+  height: 28rem;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(
+      135deg,
+      transparent 49.8%,
+      rgba(0, 124, 145, 0.09) 50%,
+      transparent 50.2%
+    ),
+    linear-gradient(
+      45deg,
+      transparent 65%,
+      rgba(8, 41, 56, 0.045) 65.1%,
+      transparent 65.3%
+    );
+}
+
+.workspace-content,
+.employee-content {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 1600px;
+}
+
+.workspace-content > *,
+.employee-content > * {
+  animation: med-page-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.workspace-content section[class*="border"],
+.workspace-content article[class*="border"],
+.employee-content section[class*="border"],
+.employee-content article[class*="border"] {
+  border-radius: 0;
+  box-shadow: 4px 4px 0 rgba(8, 41, 56, 0.035);
+}
+
+.workspace-content section[class*="border"]:hover,
+.workspace-content article[class*="border"]:hover,
+.employee-content section[class*="border"]:hover,
+.employee-content article[class*="border"]:hover {
+  border-color: var(--border-strong);
+}
+
+.workspace-content button,
+.employee-content button,
+.workspace-content a[class*="bg-[var(--accent)]"],
+.employee-content a[class*="bg-[var(--accent)]"] {
+  font-weight: 650;
+}
+
+.workspace-content input,
+.workspace-content select,
+.workspace-content textarea,
+.employee-content input,
+.employee-content select,
+.employee-content textarea {
+  min-height: 2.75rem;
+  border-color: var(--border);
+  box-shadow: inset 0 1px 2px rgba(19, 48, 72, 0.025);
+}
+
+.workspace-content input:focus,
+.workspace-content select:focus,
+.workspace-content textarea:focus,
+.employee-content input:focus,
+.employee-content select:focus,
+.employee-content textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+@keyframes med-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-content table,
+.employee-content table {
+  font-size: 0.9375rem;
+}
+
+.workspace-content thead,
+.employee-content thead {
+  color: var(--text-soft);
+  letter-spacing: 0.065em;
+}
+
+.workspace-content tbody tr:hover,
+.employee-content tbody tr:hover {
+  background: var(--surface-soft);
+}
+
+.workspace-content button:not(:disabled):active,
+.employee-content button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* Sharp clinical geometry: no pills, soft cards, or decorative rounding. */
+[class*="rounded-"] {
+  border-radius: 0 !important;
+}
+
+.app-shell button,
+.app-shell input,
+.app-shell select,
+.app-shell textarea,
+.app-shell a[class*="border"],
+.app-shell section,
+.app-shell article {
+  border-radius: 0 !important;
+}
+
+/* Solid clinical section treatment. */
+.workspace-content > div > section:first-child,
+.employee-content > div > section:first-child {
+  position: relative;
+}
+
+.workspace-content > div > section:first-child::before,
+.employee-content > div > section:first-child::before {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 4px;
+  height: calc(100% + 2px);
+  content: "";
+  background: var(--accent);
+}
+
+/* Explicit button contrast in both themes. */
+.app-shell button[class*="bg-[var(--accent)]"],
+.app-shell a[class*="bg-[var(--accent)]"] {
+  border-color: var(--accent) !important;
+  background-color: var(--accent) !important;
+  color: var(--accent-text) !important;
+}
+
+.app-shell button[class*="bg-[var(--accent)]"]:hover,
+.app-shell a[class*="bg-[var(--accent)]"]:hover {
+  border-color: var(--accent-hover) !important;
+  background-color: var(--accent-hover) !important;
+}
+
+.dark .app-shell button.bg-white,
+.dark .app-shell a.bg-white,
+.dark .app-shell button.bg-\[\#f8fafc\],
+.dark .app-shell a.bg-\[\#f8fafc\] {
+  border-color: #f8fafc !important;
+  background-color: #f8fafc !important;
+  color: #102a3a !important;
+}
+
+.dark .app-shell button.bg-slate-950,
+.dark .app-shell a.bg-slate-950,
+.dark .app-shell button.bg-black,
+.dark .app-shell a.bg-black,
+.dark .app-shell button.bg-\[\#111827\],
+.dark .app-shell a.bg-\[\#111827\] {
+  border-color: #6dc7d4 !important;
+  background-color: #102a3a !important;
+  color: #ffffff !important;
+}
+
+.dark .app-shell button[class*="bg-[var(--surface)]"],
+.dark .app-shell a[class*="bg-[var(--surface)]"],
+.dark .app-shell button[class*="bg-[var(--surface-soft)]"],
+.dark .app-shell a[class*="bg-[var(--surface-soft)]"] {
+  border-color: var(--border-strong) !important;
+  color: var(--text) !important;
+}
+
+.app-shell button:disabled,
+.app-shell a[aria-disabled="true"] {
+  opacity: 0.5;
+}
+
+/* Keep the public sign-in screen legible when the saved theme is dark. */
+.dark .login-card p,
+.dark .login-scene header span {
+  color: var(--text-soft) !important;
+}
+
+/* Dark-mode compatibility for older screens with hardcoded Tailwind colours. */
+.dark .workspace-content .bg-white,
+.dark .employee-content .bg-white,
+.dark .workspace-content .bg-\[\#f8fafc\],
+.dark .employee-content .bg-\[\#f8fafc\],
+.dark .workspace-content .bg-slate-50,
+.dark .employee-content .bg-slate-50,
+.dark .workspace-content .bg-gray-50,
+.dark .employee-content .bg-gray-50 {
+  background-color: var(--surface) !important;
+}
+
+.dark .workspace-content .bg-slate-100,
+.dark .employee-content .bg-slate-100 {
+  background-color: var(--surface-soft) !important;
+}
+
+.dark .workspace-content .text-\[\#111827\],
+.dark .employee-content .text-\[\#111827\],
+.dark .workspace-content .text-slate-950,
+.dark .employee-content .text-slate-950,
+.dark .workspace-content .text-slate-900,
+.dark .employee-content .text-slate-900,
+.dark .workspace-content .text-slate-800,
+.dark .employee-content .text-slate-800 {
+  color: var(--text) !important;
+}
+
+.dark .workspace-content .text-gray-500,
+.dark .employee-content .text-gray-500,
+.dark .workspace-content .text-slate-500,
+.dark .employee-content .text-slate-500,
+.dark .workspace-content .text-slate-600,
+.dark .employee-content .text-slate-600,
+.dark .workspace-content .text-gray-400,
+.dark .employee-content .text-gray-400,
+.dark .workspace-content .text-slate-400,
+.dark .employee-content .text-slate-400,
+.dark .workspace-content .text-slate-700,
+.dark .employee-content .text-slate-700 {
+  color: var(--muted) !important;
+}
+
+/* Accessible type scale and contrast across legacy and newer modules. */
+.app-shell .text-\[9px\],
+.app-shell .text-\[10px\],
+.app-shell .text-\[11px\] {
+  font-size: 0.75rem !important;
+  line-height: 1.35 !important;
+}
+
+.app-shell .text-xs {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}
+
+.app-shell .text-sm {
+  font-size: 0.9375rem !important;
+  line-height: 1.55 !important;
+}
+
+.workspace-content .text-gray-400,
+.employee-content .text-gray-400,
+.workspace-content .text-slate-400,
+.employee-content .text-slate-400 {
+  color: var(--muted-soft) !important;
+}
+
+.workspace-content .text-gray-500,
+.employee-content .text-gray-500,
+.workspace-content .text-slate-500,
+.employee-content .text-slate-500,
+.workspace-content .text-gray-600,
+.employee-content .text-gray-600,
+.workspace-content .text-slate-600,
+.employee-content .text-slate-600 {
+  color: var(--muted) !important;
+}
+
+.workspace-content label,
+.employee-content label {
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.workspace-content input,
+.workspace-content select,
+.workspace-content textarea,
+.employee-content input,
+.employee-content select,
+.employee-content textarea {
+  min-height: 3rem;
+  border-color: var(--border-strong) !important;
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600;
+}
+
+.workspace-content textarea,
+.employee-content textarea {
+  min-height: 7rem;
+  line-height: 1.55;
+}
+
+.workspace-content input::placeholder,
+.workspace-content textarea::placeholder,
+.employee-content input::placeholder,
+.employee-content textarea::placeholder {
+  color: var(--muted-soft) !important;
+  opacity: 1;
+}
+
+.workspace-content table,
+.employee-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.workspace-content thead,
+.employee-content thead {
+  background: var(--surface-muted);
+}
+
+.workspace-content th,
+.employee-content th {
+  min-height: 3.25rem;
+  color: var(--text-soft) !important;
+  font-size: 0.75rem !important;
+  font-weight: 800 !important;
+}
+
+.workspace-content td,
+.employee-content td {
+  color: var(--text-soft);
+  font-weight: 550;
+}
+
+.workspace-content tbody tr,
+.employee-content tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace-content tbody tr:hover,
+.employee-content tbody tr:hover {
+  background: var(--accent-soft) !important;
+}
+
+.clinical-data-table thead {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+}
+
+.clinical-data-table th {
+  box-shadow: inset 0 -1px 0 var(--border-strong);
+}
+
+.workspace-content button,
+.workspace-content a[class*="border"],
+.employee-content button,
+.employee-content a[class*="border"] {
+  min-height: 2.75rem;
+  font-size: 0.875rem;
+  font-weight: 750;
+}
+
+.workspace-content section[class*="bg-white"],
+.workspace-content article[class*="bg-white"],
+.employee-content section[class*="bg-white"],
+.employee-content article[class*="bg-white"] {
+  background-color: var(--surface) !important;
+}
+
+/* One heading language across legacy and redesigned workspace pages. */
+.clinical-page-eyebrow,
+.workspace-content section:first-child p[class*="uppercase"],
+.workspace-content header:first-child p[class*="uppercase"],
+.employee-content section:first-child p[class*="uppercase"],
+.employee-content header:first-child p[class*="uppercase"] {
+  color: var(--accent) !important;
+  font-size: 0.75rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.2em !important;
+  line-height: 1.4 !important;
+  text-transform: uppercase;
+}
+
+.clinical-page-title,
+.workspace-content h1,
+.employee-content h1 {
+  margin-top: 0.5rem;
+  color: var(--text) !important;
+  font-size: clamp(2rem, 3vw, 2.5rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.05em !important;
+  line-height: 1.08 !important;
+}
+
+.clinical-page-description {
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+/* Employee lounge: warm hospitality cues with clinical enterprise restraint. */
+.employee-lounge {
+  background: #17313c;
+  box-shadow: 0 24px 60px rgba(13, 40, 50, 0.16);
+}
+
+.employee-content .employee-lounge h1 {
+  margin-top: 0;
+  color: #ffffff !important;
+  font-size: clamp(2.5rem, 5vw, 3.5rem) !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.055em !important;
+}
+
+.employee-content .employee-lounge p[class*="uppercase"] {
+  color: #d9c6a6 !important;
+}
+
+.employee-lounge-welcome {
+  background-color: #17313c;
+  background-image: url("/medcnx-employee-lounge-bg.png");
+  background-position: center;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1000px rgba(16, 39, 49, 0.7);
+}
+
+.employee-lounge-welcome::after {
+  position: absolute;
+  top: 2rem;
+  right: 0;
+  bottom: 2rem;
+  width: 1px;
+  background: rgba(197, 167, 121, 0.35);
+  content: "";
+}
+
+.employee-lounge-service {
+  background: #102731;
+}
+
+.employee-lounge-ambience::before {
+  position: absolute;
+  top: 0;
+  right: 1.5rem;
+  width: 4.5rem;
+  height: 4px;
+  background: #c5a779;
+  content: "";
+}
+
+.employee-lounge-ambience::after {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-right: 1px solid rgba(197, 167, 121, 0.45);
+  border-bottom: 1px solid rgba(197, 167, 121, 0.45);
+  content: "";
+  pointer-events: none;
+}
+
+.employee-lounge-action {
+  display: inline-flex;
+  min-height: 3.5rem !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.055);
+  padding: 0.85rem 1rem;
+  color: #eef4f5 !important;
+  font-size: 0.875rem;
+  font-weight: 750;
+}
+
+.employee-lounge-action:hover {
+  border-color: #c5a779;
+  background: rgba(197, 167, 121, 0.12);
+  color: #ffffff !important;
+  transform: translateY(-1px);
+}
+
+.employee-lounge-action-primary {
+  border-color: #c5a779;
+  background: #c5a779;
+  color: #102731 !important;
+}
+
+.employee-lounge-action-primary:hover {
+  background: #d4bb92;
+  color: #102731 !important;
+}
+
+.employee-content > div > section:not(.employee-lounge) {
+  box-shadow: var(--shadow-xs);
+}
+
+/* Role-specific workplace atmosphere. These use solid architectural planes,
+   never gradients, so each portal feels distinct without becoming decorative. */
+.hr-office-hero {
+  background-color: #f8fbfc;
+  background-image: url("/medcnx-hr-office-bg.png");
+  background-position: center;
+  background-size: cover;
+  box-shadow:
+    inset 0 0 0 1000px rgba(248, 251, 252, 0.48),
+    0 20px 50px rgba(16, 47, 62, 0.08);
+}
+
+.hr-office-architecture {
+  background-color: #e9f2f4;
+}
+
+.hr-office-architecture::before {
+  position: absolute;
+  inset: 2rem 2rem auto;
+  height: 58%;
+  border: 1px solid #a9c0c7;
+  background-color: #f8fbfc;
+  box-shadow:
+    18px 18px 0 #cfdfe3,
+    36px 36px 0 #b9cfd5;
+  content: "";
+}
+
+.hr-office-architecture::after {
+  position: absolute;
+  right: 2rem;
+  bottom: 1.5rem;
+  width: 52%;
+  height: 3rem;
+  border-top: 4px solid #17789a;
+  background-color: #173b49;
+  content: "";
+}
+
+.executive-office-hero {
+  background-color: #f5f2eb;
+  background-image: url("/medcnx-ceo-office-bg.png");
+  background-position: center;
+  background-size: cover;
+  box-shadow:
+    inset 0 0 0 1000px rgba(245, 242, 235, 0.42),
+    0 26px 65px rgba(64, 53, 38, 0.12);
+}
+
+.executive-office-window {
+  border-left: 1px solid #b9b4a8;
+  background-color: #e4e0d7;
+}
+
+.executive-office-window::before {
+  position: absolute;
+  inset: 2rem 2rem 5.5rem;
+  border: 1px solid #a79d8b;
+  background-color: #faf9f5;
+  box-shadow:
+    14px 14px 0 #d1cabe,
+    28px 28px 0 #bab09f;
+  content: "";
+}
+
+.executive-office-window::after {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 2rem;
+  width: 72%;
+  height: 3.25rem;
+  border-top: 5px solid #9b7b4f;
+  background-color: #183b45;
+  content: "";
+}
+
+.dark .hr-office-architecture {
+  background-color: #102a34;
+}
+
+.dark .hr-office-hero {
+  box-shadow:
+    inset 0 0 0 1000px rgba(8, 25, 32, 0.78),
+    0 20px 50px rgba(0, 0, 0, 0.24);
+}
+
+.dark .hr-office-architecture::before {
+  border-color: #31515c;
+  background-color: #17333e;
+  box-shadow:
+    18px 18px 0 #1d414d,
+    36px 36px 0 #25515e;
+}
+
+.dark .executive-office-hero {
+  border-color: #6f6555;
+  background-color: #181b1b;
+  box-shadow:
+    inset 0 0 0 1000px rgba(24, 27, 27, 0.78),
+    0 26px 65px rgba(0, 0, 0, 0.28);
+}
+
+.dark .executive-office-window {
+  border-color: #6f6555;
+  background-color: #272723;
+}
+
+.dark .executive-office-window::before {
+  border-color: #6f6555;
+  background-color: #30302b;
+  box-shadow:
+    14px 14px 0 #3b3932,
+    28px 28px 0 #50493d;
+}
+
+.dark .executive-office-hero h1 {
+  color: #f5f2eb !important;
+}
+
+.dark .executive-office-hero p {
+  color: #c9c2b4;
+}
+
+@media (max-width: 1023px) {
+  .employee-lounge-welcome::after {
+    display: none;
+  }
+}
+
+/* Clinical edge markers create structure without rounded decorative cards. */
+.workspace-content section[class*="border"] > div:first-child,
+.employee-content section[class*="border"] > div:first-child {
+  position: relative;
+}
+
+.workspace-content section[class*="border"] > div:first-child::after,
+.employee-content section[class*="border"] > div:first-child::after {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 28px;
+  height: 3px;
+  content: "";
+  background: var(--accent);
+}
+
+.workspace-content [role="alert"],
+.employee-content [role="alert"] {
+  border-left-width: 4px !important;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.dark .app-shell {
+  background-image:
+    linear-gradient(rgba(109, 199, 212, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(109, 199, 212, 0.035) 1px, transparent 1px);
+}
+
+@media (max-width: 767px) {
+  body {
+    font-size: 15px;
+  }
+
+  .workspace-content,
+  .employee-content {
+    overflow-x: hidden;
+  }
+
+  .workspace-content .overflow-x-auto,
+  .employee-content .overflow-x-auto {
+    margin-inline: -1.25rem;
+    padding-inline: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.dark .workspace-content .border-black\/10,
+.dark .employee-content .border-black\/10,
+.dark .workspace-content .border-slate-200,
+.dark .employee-content .border-slate-200,
+.dark .workspace-content .border-slate-300,
+.dark .employee-content .border-slate-300,
+.dark .workspace-content .border-gray-200,
+.dark .employee-content .border-gray-200 {
+  border-color: var(--border) !important;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
