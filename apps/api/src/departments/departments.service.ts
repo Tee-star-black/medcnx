@@ -3,17 +3,24 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CurrentUser } from '../auth/types/current-user.type';
+import type { Prisma } from '@prisma/client';
+import { AccessScopeService } from '../auth/access-scope.service';
+import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 
 @Injectable()
 export class DepartmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessScope: AccessScopeService,
+  ) {}
 
   async findAll(user: CurrentUser) {
-    return this.prisma.department.findMany({
+    const employeeScope = await this.accessScope.employeeWhere(user);
+
+    const departments = await this.prisma.department.findMany({
       where: {
         organisationId: user.organisationId,
       },
@@ -26,16 +33,35 @@ export class DepartmentsService {
         description: true,
         createdAt: true,
         updatedAt: true,
-        _count: {
-          select: {
-            employees: true,
-          },
-        },
       },
     });
+
+    const visibleEmployees = await this.prisma.employee.findMany({
+      where: employeeScope,
+      select: { departmentId: true },
+    });
+
+    const counts = visibleEmployees.reduce<Record<string, number>>(
+      (accumulator, employee) => {
+        if (employee.departmentId) {
+          accumulator[employee.departmentId] =
+            (accumulator[employee.departmentId] ?? 0) + 1;
+        }
+        return accumulator;
+      },
+      {},
+    );
+
+    return departments.map((department) => ({
+      ...department,
+      _count: {
+        employees: counts[department.id] ?? 0,
+      },
+    }));
   }
 
   async findOne(user: CurrentUser, departmentId: string) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const department = await this.prisma.department.findFirst({
       where: {
         id: departmentId,
@@ -47,20 +73,6 @@ export class DepartmentsService {
         description: true,
         createdAt: true,
         updatedAt: true,
-        employees: {
-          select: {
-            id: true,
-            employeeNumber: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            jobTitle: true,
-            employmentStatus: true,
-          },
-          orderBy: {
-            firstName: 'asc',
-          },
-        },
       },
     });
 
@@ -68,7 +80,117 @@ export class DepartmentsService {
       throw new NotFoundException('Department not found.');
     }
 
-    return department;
+    const employees = await this.prisma.employee.findMany({
+      where: {
+        AND: [employeeScope, { departmentId }],
+      },
+      select: {
+        id: true,
+        employeeNumber: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        jobTitle: true,
+        employmentStatus: true,
+        managerId: true,
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+
+    return {
+      ...department,
+      employees,
+    };
+  }
+
+  async getStructure(user: CurrentUser) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+
+    const [departments, employees] = await Promise.all([
+      this.prisma.department.findMany({
+        where: { organisationId: user.organisationId },
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+        },
+      }),
+      this.prisma.employee.findMany({
+        where: employeeScope,
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        select: {
+          id: true,
+          employeeNumber: true,
+          firstName: true,
+          lastName: true,
+          preferredName: true,
+          email: true,
+          jobTitle: true,
+          employmentType: true,
+          employmentStatus: true,
+          departmentId: true,
+          managerId: true,
+        },
+      }),
+    ]);
+
+    const visibleEmployeeIds = new Set(employees.map((employee) => employee.id));
+    const childrenByManager = new Map<string, typeof employees>();
+
+    for (const employee of employees) {
+      if (!employee.managerId || !visibleEmployeeIds.has(employee.managerId)) continue;
+      const children = childrenByManager.get(employee.managerId) ?? [];
+      children.push(employee);
+      childrenByManager.set(employee.managerId, children);
+    }
+
+    const buildNode = (
+      employee: (typeof employees)[number],
+      path = new Set<string>(),
+    ): Record<string, unknown> => {
+      if (path.has(employee.id)) {
+        return {
+          ...employee,
+          directReports: [],
+          hierarchyWarning: 'Reporting cycle detected.',
+        };
+      }
+
+      const nextPath = new Set(path);
+      nextPath.add(employee.id);
+
+      return {
+        ...employee,
+        directReports: (childrenByManager.get(employee.id) ?? []).map((child) =>
+          buildNode(child, nextPath),
+        ),
+      };
+    };
+
+    const roots = employees.filter(
+      (employee) =>
+        !employee.managerId || !visibleEmployeeIds.has(employee.managerId),
+    );
+
+    const employeesByDepartment = employees.reduce<
+      Record<string, typeof employees>
+    >((accumulator, employee) => {
+      const key = employee.departmentId ?? 'UNASSIGNED';
+      (accumulator[key] ??= []).push(employee);
+      return accumulator;
+    }, {});
+
+    return {
+      departments: departments.map((department) => ({
+        ...department,
+        employeeCount: employeesByDepartment[department.id]?.length ?? 0,
+        employees: employeesByDepartment[department.id] ?? [],
+      })),
+      unassignedEmployees: employeesByDepartment.UNASSIGNED ?? [],
+      reportingTree: roots.map((employee) => buildNode(employee)),
+      visibleEmployeeCount: employees.length,
+    };
   }
 
   async create(user: CurrentUser, createDepartmentDto: CreateDepartmentDto) {
