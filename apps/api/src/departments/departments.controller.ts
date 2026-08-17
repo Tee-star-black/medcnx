@@ -13,14 +13,19 @@ import { RequirePermissions } from '../auth/decorators/require-permissions.decor
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import type { CurrentUser } from '../auth/types/current-user.type';
+import { DepartmentStructureService } from './department-structure.service';
 import { DepartmentsService } from './departments.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
+import { UpdateDepartmentStructureDto } from './dto/update-department-structure.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('departments')
 export class DepartmentsController {
-  constructor(private readonly departmentsService: DepartmentsService) {}
+  constructor(
+    private readonly departmentsService: DepartmentsService,
+    private readonly departmentStructureService: DepartmentStructureService,
+  ) {}
 
   @RequirePermissions('departments:read')
   @Get()
@@ -31,7 +36,7 @@ export class DepartmentsController {
   @RequirePermissions('departments:read')
   @Get('structure')
   getStructure(@GetCurrentUser() user: CurrentUser) {
-    return this.departmentsService.getStructure(user);
+    return this.departmentStructureService.getStructure(user);
   }
 
   @RequirePermissions('departments:read')
@@ -47,6 +52,16 @@ export class DepartmentsController {
     @Body() createDepartmentDto: CreateDepartmentDto,
   ) {
     return this.departmentsService.create(user, createDepartmentDto);
+  }
+
+  @RequirePermissions('departments:update')
+  @Patch(':id/structure')
+  updateStructure(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateDepartmentStructureDto,
+  ) {
+    return this.departmentStructureService.updateStructure(user, id, dto);
   }
 
   @RequirePermissions('departments:update')
