@@ -2,9 +2,17 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { AuditAction, EmploymentStatus, UserStatus } from '@prisma/client';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
+import type { EmployeeEmploymentTypeChangeDto } from './dto/employee-employment-type-change.dto';
 import type { EmployeeLifecycleActionDto } from './dto/employee-lifecycle-action.dto';
+import type { EmployeeManagerChangeDto } from './dto/employee-manager-change.dto';
+import type { EmployeePromotionDto } from './dto/employee-promotion.dto';
+import type { EmployeeTransferDto } from './dto/employee-transfer.dto';
 
 type EmploymentHistoryEventType =
+  | 'PROMOTED'
+  | 'TRANSFERRED'
+  | 'MANAGER_CHANGED'
+  | 'EMPLOYMENT_TYPE_CHANGED'
   | 'SUSPENDED'
   | 'REACTIVATED'
   | 'RESIGNED'
@@ -22,6 +30,14 @@ type EmployeeLifecycleRecord = {
   employmentType: string | null;
   employmentStatus: EmploymentStatus;
   endDate: Date | null;
+};
+
+type EmploymentSnapshot = {
+  departmentId: string | null;
+  managerId: string | null;
+  jobTitle: string | null;
+  employmentType: string | null;
+  employmentStatus: EmploymentStatus;
 };
 
 @Injectable()
@@ -66,6 +82,8 @@ export class EmployeeLifecycleService {
         reason:
           (metadata.reason as string | undefined) ??
           (event.entity === 'Employee' ? 'Employee record created' : null),
+        previous: metadata.previous as Record<string, unknown> | undefined,
+        next: metadata.next as Record<string, unknown> | undefined,
         previousEmploymentStatus:
           metadata.previousEmploymentStatus as string | undefined,
         nextEmploymentStatus:
@@ -78,6 +96,123 @@ export class EmployeeLifecycleService {
         message: event.message,
         recordedAt: event.createdAt,
       };
+    });
+  }
+
+  async promoteEmployee(
+    user: CurrentUser,
+    employeeId: string,
+    dto: EmployeePromotionDto,
+  ) {
+    const employee = await this.getMutableEmployee(user, employeeId);
+    const nextJobTitle = dto.jobTitle.trim();
+
+    if (employee.jobTitle === nextJobTitle) {
+      throw new BadRequestException('Employee already has this job title.');
+    }
+
+    return this.applyEmploymentChange(user, employee, {
+      eventType: 'PROMOTED',
+      effectiveDate: dto.effectiveDate,
+      reason: dto.reason,
+      data: { jobTitle: nextJobTitle },
+      nextSnapshot: { ...this.snapshot(employee), jobTitle: nextJobTitle },
+      message: `Employee promoted from ${employee.jobTitle ?? 'unspecified role'} to ${nextJobTitle}.`,
+    });
+  }
+
+  async transferEmployee(
+    user: CurrentUser,
+    employeeId: string,
+    dto: EmployeeTransferDto,
+  ) {
+    const employee = await this.getMutableEmployee(user, employeeId);
+    const department = await this.prisma.department.findFirst({
+      where: { id: dto.departmentId, organisationId: user.organisationId },
+      select: { id: true, name: true },
+    });
+
+    if (!department) throw new NotFoundException('Department not found.');
+    if (employee.departmentId === department.id) {
+      throw new BadRequestException('Employee is already in this department.');
+    }
+
+    return this.applyEmploymentChange(user, employee, {
+      eventType: 'TRANSFERRED',
+      effectiveDate: dto.effectiveDate,
+      reason: dto.reason,
+      data: { departmentId: department.id },
+      nextSnapshot: { ...this.snapshot(employee), departmentId: department.id },
+      message: `Employee transferred to ${department.name}.`,
+      metadata: { departmentName: department.name },
+    });
+  }
+
+  async changeManager(
+    user: CurrentUser,
+    employeeId: string,
+    dto: EmployeeManagerChangeDto,
+  ) {
+    const employee = await this.getMutableEmployee(user, employeeId);
+    const nextManagerId = dto.managerId?.trim() || null;
+
+    if (employee.managerId === nextManagerId) {
+      throw new BadRequestException('Employee already has this manager assignment.');
+    }
+    if (nextManagerId === employee.id) {
+      throw new BadRequestException('An employee cannot manage themselves.');
+    }
+
+    let managerName: string | null = null;
+    if (nextManagerId) {
+      const manager = await this.prisma.employee.findFirst({
+        where: {
+          id: nextManagerId,
+          organisationId: user.organisationId,
+          employmentStatus: { notIn: [EmploymentStatus.TERMINATED, EmploymentStatus.RESIGNED] },
+        },
+        select: { id: true, firstName: true, lastName: true },
+      });
+      if (!manager) throw new NotFoundException('Manager not found or inactive.');
+      await this.assertNoManagerCycle(user.organisationId, employee.id, manager.id);
+      managerName = `${manager.firstName} ${manager.lastName}`;
+    }
+
+    return this.applyEmploymentChange(user, employee, {
+      eventType: 'MANAGER_CHANGED',
+      effectiveDate: dto.effectiveDate,
+      reason: dto.reason,
+      data: { managerId: nextManagerId },
+      nextSnapshot: { ...this.snapshot(employee), managerId: nextManagerId },
+      message: nextManagerId
+        ? `Employee manager changed to ${managerName}.`
+        : 'Employee manager assignment removed.',
+      metadata: { managerName },
+    });
+  }
+
+  async changeEmploymentType(
+    user: CurrentUser,
+    employeeId: string,
+    dto: EmployeeEmploymentTypeChangeDto,
+  ) {
+    const employee = await this.getMutableEmployee(user, employeeId);
+    const nextEmploymentType = dto.employmentType.trim();
+
+    if (employee.employmentType === nextEmploymentType) {
+      throw new BadRequestException('Employee already has this employment type.');
+    }
+
+    return this.applyEmploymentChange(user, employee, {
+      eventType: 'EMPLOYMENT_TYPE_CHANGED',
+      effectiveDate: dto.effectiveDate,
+      reason: dto.reason,
+      data: { employmentType: nextEmploymentType },
+      nextSnapshot: {
+        ...this.snapshot(employee),
+        employmentType: nextEmploymentType,
+      },
+      message: `Employee employment type changed from ${employee.employmentType ?? 'unspecified'} to ${nextEmploymentType}.`,
     });
   }
 
@@ -148,6 +283,60 @@ export class EmployeeLifecycleService {
     });
   }
 
+  private async applyEmploymentChange(
+    user: CurrentUser,
+    employee: EmployeeLifecycleRecord,
+    options: {
+      eventType: EmploymentHistoryEventType;
+      effectiveDate: string;
+      reason: string;
+      data: {
+        jobTitle?: string;
+        departmentId?: string;
+        managerId?: string | null;
+        employmentType?: string;
+      };
+      nextSnapshot: EmploymentSnapshot;
+      message: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    const effectiveDate = this.parseEffectiveDate(options.effectiveDate);
+    const reason = options.reason.trim();
+    const previous = this.snapshot(employee);
+
+    const updatedEmployee = await this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.employee.update({
+        where: { id: employee.id },
+        data: options.data,
+      });
+
+      await transaction.auditLog.create({
+        data: {
+          organisationId: user.organisationId,
+          actorUserId: user.id,
+          employeeId: employee.id,
+          action: AuditAction.UPDATE,
+          entity: 'EmployeeLifecycle',
+          entityId: employee.id,
+          message: options.message,
+          metadata: {
+            eventType: options.eventType,
+            reason,
+            effectiveDate: effectiveDate.toISOString(),
+            previous,
+            next: options.nextSnapshot,
+            ...options.metadata,
+          },
+        },
+      });
+
+      return updated;
+    });
+
+    return { message: options.message, employee: updatedEmployee };
+  }
+
   private async transitionEmployee(
     user: CurrentUser,
     employeeId: string,
@@ -173,6 +362,9 @@ export class EmployeeLifecycleService {
         `Cannot transition employee from ${employee.employmentStatus} to ${options.nextStatus}.`,
       );
     }
+
+    const previous = this.snapshot(employee);
+    const next = { ...previous, employmentStatus: options.nextStatus };
 
     const updatedEmployee = await this.prisma.$transaction(async (transaction) => {
       const updated = await transaction.employee.update({
@@ -223,6 +415,8 @@ export class EmployeeLifecycleService {
             eventType: options.eventType,
             reason,
             effectiveDate: effectiveDate.toISOString(),
+            previous,
+            next,
             previousEmploymentStatus: employee.employmentStatus,
             nextEmploymentStatus: options.nextStatus,
             departmentId: employee.departmentId,
@@ -240,6 +434,53 @@ export class EmployeeLifecycleService {
     return {
       message: options.message,
       employee: updatedEmployee,
+    };
+  }
+
+  private async getMutableEmployee(user: CurrentUser, employeeId: string) {
+    const employee = await this.getEmployee(user, employeeId);
+    if (
+      employee.employmentStatus === EmploymentStatus.TERMINATED ||
+      employee.employmentStatus === EmploymentStatus.RESIGNED
+    ) {
+      throw new BadRequestException('Inactive employees cannot receive employment changes.');
+    }
+    return employee;
+  }
+
+  private async assertNoManagerCycle(
+    organisationId: string,
+    employeeId: string,
+    proposedManagerId: string,
+  ) {
+    let currentManagerId: string | null = proposedManagerId;
+    const visited = new Set<string>();
+
+    while (currentManagerId) {
+      if (currentManagerId === employeeId) {
+        throw new BadRequestException('Manager assignment would create a reporting cycle.');
+      }
+      if (visited.has(currentManagerId)) {
+        throw new BadRequestException('Existing manager hierarchy contains a reporting cycle.');
+      }
+      visited.add(currentManagerId);
+
+      const currentManager = await this.prisma.employee.findFirst({
+        where: { id: currentManagerId, organisationId },
+        select: { managerId: true },
+      });
+      if (!currentManager) throw new NotFoundException('Manager not found.');
+      currentManagerId = currentManager.managerId;
+    }
+  }
+
+  private snapshot(employee: EmployeeLifecycleRecord): EmploymentSnapshot {
+    return {
+      departmentId: employee.departmentId,
+      managerId: employee.managerId,
+      jobTitle: employee.jobTitle,
+      employmentType: employee.employmentType,
+      employmentStatus: employee.employmentStatus,
     };
   }
 
