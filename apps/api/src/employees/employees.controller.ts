@@ -26,6 +26,7 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UploadEmployeeDocumentDto } from './dto/upload-employee-document.dto';
 import { UpdateEmployeeDocumentDto } from './dto/update-employee-document.dto';
+import { EmployeeLifecycleService } from './employee-lifecycle.service';
 import { EmployeesService } from './employees.service';
 
 const employeeDocumentsUploadDestination = join(
@@ -45,7 +46,10 @@ const allowedEmployeeDocumentMimeTypes = [
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('employees')
 export class EmployeesController {
-  constructor(private readonly employeesService: EmployeesService) {}
+  constructor(
+    private readonly employeesService: EmployeesService,
+    private readonly employeeLifecycleService: EmployeeLifecycleService,
+  ) {}
 
   @RequirePermissions('employees:read')
   @Get()
@@ -68,7 +72,7 @@ export class EmployeesController {
   findAllEmployeeDocuments(@GetCurrentUser() user: CurrentUser) {
     return this.employeesService.findAllEmployeeDocuments(user);
   }
-  
+
   @Get('documents/:documentId/download')
   async downloadEmployeeDocument(
     @GetCurrentUser() user: CurrentUser,
@@ -212,9 +216,9 @@ export class EmployeesController {
     return this.employeesService.update(user, id, updateEmployeeDto);
   }
 
-  @RequirePermissions('employees:delete')
+  @RequirePermissions('employees:update')
   @Delete(':id')
   remove(@GetCurrentUser() user: CurrentUser, @Param('id') id: string) {
-    return this.employeesService.remove(user, id);
+    return this.employeeLifecycleService.terminateEmployee(user, id);
   }
 }
