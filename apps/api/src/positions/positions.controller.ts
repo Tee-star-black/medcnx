@@ -6,6 +6,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { AssignPositionDto } from './dto/assign-position.dto';
 import { CreatePositionDto } from './dto/create-position.dto';
+import { CreatePositionRecruitmentJobDto } from './dto/create-position-recruitment-job.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 import { PositionsService } from './positions.service';
 
@@ -18,6 +19,12 @@ export class PositionsController {
   @Get()
   findAll(@GetCurrentUser() user: CurrentUser) {
     return this.positionsService.findAll(user);
+  }
+
+  @RequirePermissions('departments:read')
+  @Get('vacancy-plan')
+  getVacancyPlan(@GetCurrentUser() user: CurrentUser) {
+    return this.positionsService.getVacancyPlan(user);
   }
 
   @RequirePermissions('employees:read')
@@ -52,6 +59,16 @@ export class PositionsController {
     @Body() dto: CreatePositionDto,
   ) {
     return this.positionsService.create(user, dto);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post(':id/recruitment-job')
+  createRecruitmentJob(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: CreatePositionRecruitmentJobDto,
+  ) {
+    return this.positionsService.createRecruitmentJob(user, id, dto);
   }
 
   @RequirePermissions('departments:update')
