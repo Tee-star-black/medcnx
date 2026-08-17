@@ -53,14 +53,25 @@ describe('AttendanceService V1', () => {
     auditLog: { create: jest.fn() },
     $transaction: jest.fn(),
   };
+  const accessScope = {
+    employeeWhere: jest
+      .fn()
+      .mockResolvedValue({ organisationId: 'organisation-1' }),
+    assertEmployeeAccess: jest.fn().mockResolvedValue(undefined),
+  };
   const service = new AttendanceService(
     prisma as never,
     { sendMail: jest.fn() } as never,
     { notifyEmployee: jest.fn() } as never,
+    accessScope as never,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    accessScope.employeeWhere.mockResolvedValue({
+      organisationId: 'organisation-1',
+    });
+    accessScope.assertEmployeeAccess.mockResolvedValue(undefined);
     prisma.employee.findFirst.mockResolvedValue(employee);
     prisma.organisation.findUnique.mockResolvedValue(policy);
   });
@@ -248,6 +259,8 @@ describe('AttendanceService V1', () => {
   it('requires rejection comments when reviewing a correction', async () => {
     prisma.attendanceCorrectionRequest.findFirst.mockResolvedValue({
       id: 'correction-1',
+      organisationId: 'organisation-1',
+      employeeId: 'employee-1',
       status: AttendanceCorrectionStatus.PENDING,
       attendanceRecord: null,
     });
