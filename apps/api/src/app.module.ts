@@ -11,6 +11,7 @@ import { PerformanceModule } from './performance/performance.module';
 import { LeaveModule } from './leave/leave.module';
 import { OrganisationsModule } from './organisations/organisations.module';
 import { PayrollModule } from './payroll/payroll.module';
+import { PositionsModule } from './positions/positions.module';
 import { RecruitmentModule } from './recruitment/recruitment.module';
 import { MailModule } from './mail/mail.module';
 import { EmployeeSelfServiceModule } from './employee-self-service/employee-self-service.module';
@@ -35,6 +36,7 @@ import { validateEnvironment } from './config/validate-environment';
     GeneratedDocumentsModule,
     PerformanceModule,
     PayrollModule,
+    PositionsModule,
     RecruitmentModule,
     MailModule,
     EmployeeSelfServiceModule,
