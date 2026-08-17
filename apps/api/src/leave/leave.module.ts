@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { EmployeeSelfServiceModule } from '../employee-self-service/employee-self-service.module';
 import { LeaveController } from './leave.controller';
 import { LeaveService } from './leave.service';
-import { EmployeeSelfServiceModule } from '../employee-self-service/employee-self-service.module';
 
 @Module({
-  imports: [EmployeeSelfServiceModule],
+  imports: [AuthModule, EmployeeSelfServiceModule],
   controllers: [LeaveController],
   providers: [LeaveService],
 })
