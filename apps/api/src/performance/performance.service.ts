@@ -6,10 +6,10 @@ import {
 } from '@nestjs/common';
 import {
   AuditAction,
-  PerformanceCycleStatus,
   PerformanceReviewStatus,
   Prisma,
 } from '@prisma/client';
+import { AccessScopeService } from '../auth/access-scope.service';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
 import {
@@ -28,12 +28,17 @@ import {
 
 @Injectable()
 export class PerformanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessScope: AccessScopeService,
+  ) {}
 
   async dashboard(user: CurrentUser) {
     const now = new Date();
     const inThirtyDays = new Date(now);
     inThirtyDays.setDate(inThirtyDays.getDate() + 30);
+    const employeeScope = await this.accessScope.employeeWhere(user);
+
     const [
       activeCycles,
       pendingReviews,
@@ -49,12 +54,14 @@ export class PerformanceService {
       this.prisma.performanceReview.count({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           status: { in: ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'] },
         },
       }),
       this.prisma.performanceReview.count({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           cycle: { dueDate: { lt: now } },
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
         },
@@ -62,6 +69,7 @@ export class PerformanceService {
       this.prisma.performanceGoal.count({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           targetDate: { gte: now, lte: inThirtyDays },
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
         },
@@ -69,6 +77,7 @@ export class PerformanceService {
       this.prisma.performanceGoal.count({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           targetDate: { lt: now },
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
         },
@@ -76,11 +85,15 @@ export class PerformanceService {
       this.prisma.performanceDevelopmentPlan.count({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           status: { in: ['PLANNED', 'IN_PROGRESS'] },
         },
       }),
       this.prisma.performanceReview.findMany({
-        where: { organisationId: user.organisationId },
+        where: {
+          organisationId: user.organisationId,
+          employee: employeeScope,
+        },
         include: {
           employee: {
             select: {
@@ -97,6 +110,7 @@ export class PerformanceService {
         take: 8,
       }),
     ]);
+
     return {
       activeCycles,
       pendingReviews,
@@ -129,8 +143,13 @@ export class PerformanceService {
         createdByUserId: user.id,
       },
     });
-    await this.audit(user, AuditAction.CREATE, 'PerformanceTemplate', template.id,
-      'Performance assessment template created.');
+    await this.audit(
+      user,
+      AuditAction.CREATE,
+      'PerformanceTemplate',
+      template.id,
+      'Performance assessment template created.',
+    );
     return template;
   }
 
@@ -148,8 +167,10 @@ export class PerformanceService {
   async createCycle(user: CurrentUser, dto: CreatePerformanceCycleDto) {
     const startDate = new Date(dto.startDate);
     const dueDate = new Date(dto.dueDate);
-    if (dueDate <= startDate)
+    if (dueDate <= startDate) {
       throw new BadRequestException('The due date must be after the start date.');
+    }
+
     const template = await this.prisma.performanceTemplate.findFirst({
       where: {
         id: dto.templateId,
@@ -157,7 +178,10 @@ export class PerformanceService {
         status: 'ACTIVE',
       },
     });
-    if (!template) throw new NotFoundException('Active assessment template not found.');
+    if (!template) {
+      throw new NotFoundException('Active assessment template not found.');
+    }
+
     const cycle = await this.prisma.performanceCycle.create({
       data: {
         organisationId: user.organisationId,
@@ -171,8 +195,13 @@ export class PerformanceService {
         createdByUserId: user.id,
       },
     });
-    await this.audit(user, AuditAction.CREATE, 'PerformanceCycle', cycle.id,
-      'Performance review cycle created.');
+    await this.audit(
+      user,
+      AuditAction.CREATE,
+      'PerformanceCycle',
+      cycle.id,
+      'Performance review cycle created.',
+    );
     return cycle;
   }
 
@@ -181,6 +210,8 @@ export class PerformanceService {
     cycleId: string,
     dto: AssignPerformanceReviewDto,
   ) {
+    await this.accessScope.assertEmployeeAccess(user, dto.employeeId);
+
     const [cycle, employee, reviewer] = await Promise.all([
       this.prisma.performanceCycle.findFirst({
         where: { id: cycleId, organisationId: user.organisationId },
@@ -194,9 +225,11 @@ export class PerformanceService {
         include: { employeeProfile: true },
       }),
     ]);
+
     if (!cycle) throw new NotFoundException('Performance cycle not found.');
     if (!employee) throw new NotFoundException('Employee not found.');
     if (!reviewer) throw new NotFoundException('Reviewer not found.');
+
     const review = await this.prisma.performanceReview.upsert({
       where: {
         cycleId_employeeId_reviewerUserId_reviewerType: {
@@ -221,6 +254,7 @@ export class PerformanceService {
       },
       include: { employee: true, cycle: true },
     });
+
     await this.notifyUser(
       user.organisationId,
       reviewer.id,
@@ -228,18 +262,30 @@ export class PerformanceService {
       `You have been asked to complete ${cycle.name} for ${employee.firstName} ${employee.lastName}.`,
       `/employee/performance?reviewId=${review.id}`,
     );
-    await this.audit(user, AuditAction.CREATE, 'PerformanceReview', review.id,
-      'Performance reviewer assigned.', {
+    await this.audit(
+      user,
+      AuditAction.CREATE,
+      'PerformanceReview',
+      review.id,
+      'Performance reviewer assigned.',
+      {
         employeeId: employee.id,
         reviewerType: dto.reviewerType,
-      });
+      },
+    );
     return review;
   }
 
-  listReviews(user: CurrentUser, employeeId?: string, cycleId?: string) {
+  async listReviews(user: CurrentUser, employeeId?: string, cycleId?: string) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+    if (employeeId) {
+      await this.accessScope.assertEmployeeAccess(user, employeeId);
+    }
+
     return this.prisma.performanceReview.findMany({
       where: {
         organisationId: user.organisationId,
+        employee: employeeScope,
         ...(employeeId ? { employeeId } : {}),
         ...(cycleId ? { cycleId } : {}),
       },
@@ -265,15 +311,22 @@ export class PerformanceService {
       include: this.reviewInclude(),
     });
     if (!review) throw new NotFoundException('Performance review not found.');
-    if (!allowOrganisationView && review.reviewerUserId !== user.id)
+
+    if (allowOrganisationView) {
+      await this.accessScope.assertEmployeeAccess(user, review.employeeId);
+    } else if (review.reviewerUserId !== user.id) {
       throw new ForbiddenException('This review is assigned to another reviewer.');
+    }
+
     return review;
   }
 
   async saveReview(user: CurrentUser, id: string, dto: SavePerformanceReviewDto) {
     const review = await this.getReview(user, id);
-    if (['COMPLETED', 'CANCELLED'].includes(review.status))
+    if (['COMPLETED', 'CANCELLED'].includes(review.status)) {
       throw new BadRequestException('This review can no longer be edited.');
+    }
+
     const updated = await this.prisma.performanceReview.update({
       where: { id },
       data: {
@@ -284,8 +337,13 @@ export class PerformanceService {
         status: 'IN_PROGRESS',
       },
     });
-    await this.audit(user, AuditAction.UPDATE, 'PerformanceReview', id,
-      'Performance review draft saved.');
+    await this.audit(
+      user,
+      AuditAction.UPDATE,
+      'PerformanceReview',
+      id,
+      'Performance review draft saved.',
+    );
     return updated;
   }
 
@@ -298,8 +356,12 @@ export class PerformanceService {
     const missing = questions
       .filter((question) => question.required && !dto.answers[question.id])
       .map((question) => question.id);
-    if (missing.length)
-      throw new BadRequestException(`Complete required questions: ${missing.join(', ')}.`);
+    if (missing.length) {
+      throw new BadRequestException(
+        `Complete required questions: ${missing.join(', ')}.`,
+      );
+    }
+
     const updated = await this.prisma.performanceReview.update({
       where: { id },
       data: {
@@ -311,14 +373,20 @@ export class PerformanceService {
         submittedAt: new Date(),
       },
     });
+
     await this.notifyPerformanceManagers(
       user.organisationId,
       'Performance review submitted',
       `${review.employee.firstName} ${review.employee.lastName}'s assigned review has been submitted.`,
       `/dashboard/performance/reviews/${id}`,
     );
-    await this.audit(user, AuditAction.UPDATE, 'PerformanceReview', id,
-      'Performance review submitted.');
+    await this.audit(
+      user,
+      AuditAction.UPDATE,
+      'PerformanceReview',
+      id,
+      'Performance review submitted.',
+    );
     return updated;
   }
 
@@ -328,8 +396,10 @@ export class PerformanceService {
     dto: FinalisePerformanceReviewDto,
   ) {
     const review = await this.getReview(user, id, true);
-    if (review.status !== PerformanceReviewStatus.SUBMITTED)
+    if (review.status !== PerformanceReviewStatus.SUBMITTED) {
       throw new BadRequestException('Only a submitted review can be finalised.');
+    }
+
     const updated = await this.prisma.performanceReview.update({
       where: { id },
       data: {
@@ -340,6 +410,7 @@ export class PerformanceService {
         status: 'AWAITING_ACKNOWLEDGEMENT',
       },
     });
+
     if (review.employee.userId) {
       await this.notifyUser(
         user.organisationId,
@@ -349,16 +420,26 @@ export class PerformanceService {
         `/employee/performance?reviewId=${id}`,
       );
     }
-    await this.audit(user, AuditAction.APPROVE, 'PerformanceReview', id,
-      'Performance review finalised.');
+    await this.audit(
+      user,
+      AuditAction.APPROVE,
+      'PerformanceReview',
+      id,
+      'Performance review finalised.',
+    );
     return updated;
   }
 
-  async acknowledge(user: CurrentUser, id: string, dto: AcknowledgePerformanceReviewDto) {
+  async acknowledge(
+    user: CurrentUser,
+    id: string,
+    dto: AcknowledgePerformanceReviewDto,
+  ) {
     const employee = await this.prisma.employee.findFirst({
       where: { userId: user.id, organisationId: user.organisationId },
     });
     if (!employee) throw new NotFoundException('Employee profile not found.');
+
     const review = await this.prisma.performanceReview.findFirst({
       where: {
         id,
@@ -367,8 +448,12 @@ export class PerformanceService {
         status: 'AWAITING_ACKNOWLEDGEMENT',
       },
     });
-    if (!review)
-      throw new NotFoundException('Review awaiting your acknowledgement not found.');
+    if (!review) {
+      throw new NotFoundException(
+        'Review awaiting your acknowledgement not found.',
+      );
+    }
+
     const updated = await this.prisma.performanceReview.update({
       where: { id },
       data: {
@@ -377,12 +462,19 @@ export class PerformanceService {
         status: 'COMPLETED',
       },
     });
-    await this.audit(user, AuditAction.APPROVE, 'PerformanceReview', id,
-      'Employee acknowledged performance review.');
+    await this.audit(
+      user,
+      AuditAction.APPROVE,
+      'PerformanceReview',
+      id,
+      'Employee acknowledged performance review.',
+    );
     return updated;
   }
 
   async employeeSummary(user: CurrentUser, employeeId: string) {
+    await this.accessScope.assertEmployeeAccess(user, employeeId);
+
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, organisationId: user.organisationId },
       select: {
@@ -395,6 +487,7 @@ export class PerformanceService {
       },
     });
     if (!employee) throw new NotFoundException('Employee not found.');
+
     const [reviews, goals, developmentPlans] = await Promise.all([
       this.prisma.performanceReview.findMany({
         where: {
@@ -429,10 +522,16 @@ export class PerformanceService {
     };
   }
 
-  listGoals(user: CurrentUser, employeeId?: string) {
+  async listGoals(user: CurrentUser, employeeId?: string) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+    if (employeeId) {
+      await this.accessScope.assertEmployeeAccess(user, employeeId);
+    }
+
     return this.prisma.performanceGoal.findMany({
       where: {
         organisationId: user.organisationId,
+        employee: employeeScope,
         ...(employeeId ? { employeeId } : {}),
       },
       include: { employee: true },
@@ -455,8 +554,13 @@ export class PerformanceService {
         createdByUserId: user.id,
       },
     });
-    await this.audit(user, AuditAction.CREATE, 'PerformanceGoal', goal.id,
-      'Performance goal created.');
+    await this.audit(
+      user,
+      AuditAction.CREATE,
+      'PerformanceGoal',
+      goal.id,
+      'Performance goal created.',
+    );
     return goal;
   }
 
@@ -465,6 +569,8 @@ export class PerformanceService {
       where: { id, organisationId: user.organisationId },
     });
     if (!goal) throw new NotFoundException('Performance goal not found.');
+    await this.accessScope.assertEmployeeAccess(user, goal.employeeId);
+
     return this.prisma.performanceGoal.update({
       where: { id },
       data: {
@@ -474,10 +580,16 @@ export class PerformanceService {
     });
   }
 
-  listDevelopmentPlans(user: CurrentUser, employeeId?: string) {
+  async listDevelopmentPlans(user: CurrentUser, employeeId?: string) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+    if (employeeId) {
+      await this.accessScope.assertEmployeeAccess(user, employeeId);
+    }
+
     return this.prisma.performanceDevelopmentPlan.findMany({
       where: {
         organisationId: user.organisationId,
+        employee: employeeScope,
         ...(employeeId ? { employeeId } : {}),
       },
       include: { employee: true },
@@ -485,7 +597,10 @@ export class PerformanceService {
     });
   }
 
-  async createDevelopmentPlan(user: CurrentUser, dto: CreateDevelopmentPlanDto) {
+  async createDevelopmentPlan(
+    user: CurrentUser,
+    dto: CreateDevelopmentPlanDto,
+  ) {
     await this.assertEmployee(user, dto.employeeId);
     const plan = await this.prisma.performanceDevelopmentPlan.create({
       data: {
@@ -500,8 +615,13 @@ export class PerformanceService {
         createdByUserId: user.id,
       },
     });
-    await this.audit(user, AuditAction.CREATE, 'PerformanceDevelopmentPlan', plan.id,
-      'Development plan created.');
+    await this.audit(
+      user,
+      AuditAction.CREATE,
+      'PerformanceDevelopmentPlan',
+      plan.id,
+      'Development plan created.',
+    );
     return plan;
   }
 
@@ -514,6 +634,8 @@ export class PerformanceService {
       where: { id, organisationId: user.organisationId },
     });
     if (!plan) throw new NotFoundException('Development plan not found.');
+    await this.accessScope.assertEmployeeAccess(user, plan.employeeId);
+
     return this.prisma.performanceDevelopmentPlan.update({
       where: { id },
       data: {
@@ -545,6 +667,7 @@ export class PerformanceService {
   }
 
   private async assertEmployee(user: CurrentUser, employeeId: string) {
+    await this.accessScope.assertEmployeeAccess(user, employeeId);
     const employee = await this.prisma.employee.findFirst({
       where: { id: employeeId, organisationId: user.organisationId },
       select: { id: true },
