@@ -31,32 +31,54 @@ export class EmployeeLifecycleService {
   async getHistory(user: CurrentUser, employeeId: string) {
     await this.getEmployee(user, employeeId);
 
-    return this.prisma.$queryRaw<Array<Record<string, unknown>>>`
-      SELECT
-        "id",
-        "organisationId",
-        "employeeId",
-        "eventType",
-        "effectiveDate",
-        "reason",
-        "previousDepartmentId",
-        "nextDepartmentId",
-        "previousManagerId",
-        "nextManagerId",
-        "previousJobTitle",
-        "nextJobTitle",
-        "previousEmploymentType",
-        "nextEmploymentType",
-        "previousEmploymentStatus",
-        "nextEmploymentStatus",
-        "changedByUserId",
-        "metadata",
-        "createdAt"
-      FROM "employee_employment_history"
-      WHERE "organisationId" = ${user.organisationId}
-        AND "employeeId" = ${employeeId}
-      ORDER BY "effectiveDate" DESC, "createdAt" DESC
-    `;
+    const events = await this.prisma.auditLog.findMany({
+      where: {
+        organisationId: user.organisationId,
+        employeeId,
+        OR: [
+          { entity: 'Employee', action: AuditAction.CREATE },
+          { entity: 'EmployeeLifecycle' },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        action: true,
+        entity: true,
+        message: true,
+        metadata: true,
+        actorUserId: true,
+        createdAt: true,
+      },
+    });
+
+    return events.map((event) => {
+      const metadata = (event.metadata ?? {}) as Record<string, unknown>;
+      return {
+        id: event.id,
+        eventType:
+          event.entity === 'Employee' && event.action === AuditAction.CREATE
+            ? 'HIRED'
+            : (metadata.eventType as string | undefined) ?? 'OTHER',
+        effectiveDate:
+          (metadata.effectiveDate as string | undefined) ??
+          event.createdAt.toISOString(),
+        reason:
+          (metadata.reason as string | undefined) ??
+          (event.entity === 'Employee' ? 'Employee record created' : null),
+        previousEmploymentStatus:
+          metadata.previousEmploymentStatus as string | undefined,
+        nextEmploymentStatus:
+          metadata.nextEmploymentStatus as string | undefined,
+        departmentId: metadata.departmentId as string | undefined,
+        managerId: metadata.managerId as string | undefined,
+        jobTitle: metadata.jobTitle as string | undefined,
+        employmentType: metadata.employmentType as string | undefined,
+        changedByUserId: event.actorUserId,
+        message: event.message,
+        recordedAt: event.createdAt,
+      };
+    });
   }
 
   terminateEmployee(
@@ -188,46 +210,6 @@ export class EmployeeLifecycleService {
         }
       }
 
-      await transaction.$executeRaw`
-        INSERT INTO "employee_employment_history" (
-          "organisationId",
-          "employeeId",
-          "eventType",
-          "effectiveDate",
-          "reason",
-          "previousDepartmentId",
-          "nextDepartmentId",
-          "previousManagerId",
-          "nextManagerId",
-          "previousJobTitle",
-          "nextJobTitle",
-          "previousEmploymentType",
-          "nextEmploymentType",
-          "previousEmploymentStatus",
-          "nextEmploymentStatus",
-          "changedByUserId",
-          "metadata"
-        ) VALUES (
-          ${user.organisationId},
-          ${employee.id},
-          ${options.eventType},
-          ${effectiveDate},
-          ${reason},
-          ${employee.departmentId},
-          ${employee.departmentId},
-          ${employee.managerId},
-          ${employee.managerId},
-          ${employee.jobTitle},
-          ${employee.jobTitle},
-          ${employee.employmentType},
-          ${employee.employmentType},
-          ${employee.employmentStatus}::text,
-          ${options.nextStatus}::text,
-          ${user.id},
-          ${JSON.stringify({ linkedUserId: employee.userId })}::jsonb
-        )
-      `;
-
       await transaction.auditLog.create({
         data: {
           organisationId: user.organisationId,
@@ -243,6 +225,10 @@ export class EmployeeLifecycleService {
             effectiveDate: effectiveDate.toISOString(),
             previousEmploymentStatus: employee.employmentStatus,
             nextEmploymentStatus: options.nextStatus,
+            departmentId: employee.departmentId,
+            managerId: employee.managerId,
+            jobTitle: employee.jobTitle,
+            employmentType: employee.employmentType,
             linkedUserId: employee.userId,
           },
         },
