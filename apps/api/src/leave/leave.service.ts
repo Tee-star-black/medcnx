@@ -10,6 +10,7 @@ import {
   LeaveType,
   Prisma,
 } from '@prisma/client';
+import { AccessScopeService } from '../auth/access-scope.service';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
 import { EmployeeNotificationService } from '../employee-self-service/employee-notification.service';
@@ -57,12 +58,16 @@ export class LeaveService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: EmployeeNotificationService,
+    private readonly accessScope: AccessScopeService,
   ) {}
 
   async findAll(user: CurrentUser) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+
     return this.prisma.leaveRequest.findMany({
       where: {
         organisationId: user.organisationId,
+        employee: employeeScope,
       },
       orderBy: {
         createdAt: 'desc',
@@ -88,15 +93,11 @@ export class LeaveService {
 
   async createMyLeave(user: CurrentUser, dto: CreateMyLeaveRequestDto) {
     const employee = await this.getLinkedEmployee(user);
-
     const leaveType = dto.leaveType as LeaveType;
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
-
     this.validateDateRange(startDate, endDate);
-
     const totalDays = this.calculateLeaveDays(startDate, endDate);
-
     const policy = await this.getLeavePolicy(user.organisationId);
 
     this.validateSupportingDocumentPolicy({
@@ -155,15 +156,11 @@ export class LeaveService {
     file?: Express.Multer.File,
   ) {
     const employee = await this.getLinkedEmployee(user);
-
     const leaveType = dto.leaveType as LeaveType;
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
-
     this.validateDateRange(startDate, endDate);
-
     const totalDays = this.calculateLeaveDays(startDate, endDate);
-
     const policy = await this.getLeavePolicy(user.organisationId);
 
     this.validateSupportingDocumentPolicy({
@@ -216,9 +213,7 @@ export class LeaveService {
           action: AuditAction.UPLOAD,
           entity: 'LeaveDocument',
           entityId: leaveDocument.id,
-          message: `Supporting document uploaded for ${this.formatLeaveType(
-            leaveType,
-          )}.`,
+          message: `Supporting document uploaded for ${this.formatLeaveType(leaveType)}.`,
           metadata: {
             leaveRequestId: leaveRequest.id,
             originalName: file.originalname,
@@ -252,10 +247,12 @@ export class LeaveService {
   }
 
   async findOne(user: CurrentUser, id: string) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const leaveRequest = await this.prisma.leaveRequest.findFirst({
       where: {
         id,
         organisationId: user.organisationId,
+        employee: employeeScope,
       },
       include: this.leaveRequestInclude(),
     });
@@ -299,14 +296,15 @@ export class LeaveService {
     }
 
     const isEmployeeOwner = document.employee.userId === user.id;
-
     const canManageLeave =
       user.roles.includes('SUPER_ADMIN') ||
       user.roles.includes('ORG_ADMIN') ||
       user.roles.includes('HR_MANAGER') ||
       user.roles.includes('MANAGER');
 
-    if (!canManageLeave && !isEmployeeOwner) {
+    if (canManageLeave) {
+      await this.accessScope.assertEmployeeAccess(user, document.employeeId);
+    } else if (!isEmployeeOwner) {
       throw new BadRequestException('You cannot access this document.');
     }
 
@@ -332,6 +330,7 @@ export class LeaveService {
   }
 
   async create(user: CurrentUser, dto: CreateLeaveRequestDto) {
+    await this.accessScope.assertEmployeeAccess(user, dto.employeeId);
     const employee = await this.prisma.employee.findFirst({
       where: {
         id: dto.employeeId,
@@ -351,11 +350,8 @@ export class LeaveService {
     const leaveType = dto.leaveType as LeaveType;
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
-
     this.validateDateRange(startDate, endDate);
-
     const totalDays = this.calculateLeaveDays(startDate, endDate);
-
     const policy = await this.getLeavePolicy(user.organisationId);
 
     await this.validateLeaveBalance({
@@ -401,10 +397,12 @@ export class LeaveService {
   }
 
   async update(user: CurrentUser, id: string, dto: UpdateLeaveRequestDto) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const existing = await this.prisma.leaveRequest.findFirst({
       where: {
         id,
         organisationId: user.organisationId,
+        employee: employeeScope,
       },
     });
 
@@ -413,23 +411,14 @@ export class LeaveService {
     }
 
     if (existing.status !== LeaveStatus.PENDING) {
-      throw new BadRequestException(
-        'Only pending leave requests can be updated.',
-      );
+      throw new BadRequestException('Only pending leave requests can be updated.');
     }
 
     const leaveType = (dto.leaveType ?? existing.leaveType) as LeaveType;
-
-    const startDate = dto.startDate
-      ? new Date(dto.startDate)
-      : existing.startDate;
-
+    const startDate = dto.startDate ? new Date(dto.startDate) : existing.startDate;
     const endDate = dto.endDate ? new Date(dto.endDate) : existing.endDate;
-
     this.validateDateRange(startDate, endDate);
-
     const totalDays = this.calculateLeaveDays(startDate, endDate);
-
     const policy = await this.getLeavePolicy(user.organisationId);
 
     await this.validateLeaveBalance({
@@ -442,9 +431,7 @@ export class LeaveService {
     });
 
     const leaveRequest = await this.prisma.leaveRequest.update({
-      where: {
-        id,
-      },
+      where: { id },
       data: {
         leaveType,
         startDate,
@@ -477,10 +464,12 @@ export class LeaveService {
   }
 
   async approve(user: CurrentUser, id: string) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const existing = await this.prisma.leaveRequest.findFirst({
       where: {
         id,
         organisationId: user.organisationId,
+        employee: employeeScope,
       },
     });
 
@@ -489,15 +478,11 @@ export class LeaveService {
     }
 
     if (existing.status !== LeaveStatus.PENDING) {
-      throw new BadRequestException(
-        'Only pending leave requests can be approved.',
-      );
+      throw new BadRequestException('Only pending leave requests can be approved.');
     }
 
     const leaveRequest = await this.prisma.leaveRequest.update({
-      where: {
-        id,
-      },
+      where: { id },
       data: {
         status: LeaveStatus.APPROVED,
         approvedByUserId: user.id,
@@ -532,10 +517,12 @@ export class LeaveService {
   }
 
   async reject(user: CurrentUser, id: string, dto: RejectLeaveRequestDto) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const existing = await this.prisma.leaveRequest.findFirst({
       where: {
         id,
         organisationId: user.organisationId,
+        employee: employeeScope,
       },
     });
 
@@ -544,15 +531,11 @@ export class LeaveService {
     }
 
     if (existing.status !== LeaveStatus.PENDING) {
-      throw new BadRequestException(
-        'Only pending leave requests can be rejected.',
-      );
+      throw new BadRequestException('Only pending leave requests can be rejected.');
     }
 
     const leaveRequest = await this.prisma.leaveRequest.update({
-      where: {
-        id,
-      },
+      where: { id },
       data: {
         status: LeaveStatus.REJECTED,
         approvedByUserId: user.id,
@@ -571,9 +554,7 @@ export class LeaveService {
         entity: 'LeaveRequest',
         entityId: leaveRequest.id,
         message: 'Leave request rejected.',
-        metadata: {
-          rejectionNote: dto.rejectionNote,
-        },
+        metadata: { rejectionNote: dto.rejectionNote },
       },
     });
 
@@ -590,10 +571,12 @@ export class LeaveService {
   }
 
   async cancel(user: CurrentUser, id: string) {
+    const employee = await this.getLinkedEmployee(user);
     const existing = await this.prisma.leaveRequest.findFirst({
       where: {
         id,
         organisationId: user.organisationId,
+        employeeId: employee.id,
       },
     });
 
@@ -602,18 +585,12 @@ export class LeaveService {
     }
 
     if (existing.status !== LeaveStatus.PENDING) {
-      throw new BadRequestException(
-        'Only pending leave requests can be cancelled.',
-      );
+      throw new BadRequestException('Only pending leave requests can be cancelled.');
     }
 
     const leaveRequest = await this.prisma.leaveRequest.update({
-      where: {
-        id,
-      },
-      data: {
-        status: LeaveStatus.CANCELLED,
-      },
+      where: { id },
+      data: { status: LeaveStatus.CANCELLED },
       include: this.leaveRequestInclude(),
     });
 
@@ -667,50 +644,30 @@ export class LeaveService {
     excludeLeaveRequestId?: string;
     policy: OrganisationLeavePolicy;
   }) {
-    if (!leaveTypesWithHardLimits.includes(leaveType)) {
-      return;
-    }
-
+    if (!leaveTypesWithHardLimits.includes(leaveType)) return;
     const allocatedDays = this.getAllocatedLeaveDays(leaveType, policy);
-
-    if (allocatedDays <= 0) {
-      return;
-    }
+    if (allocatedDays <= 0) return;
 
     const existingLeaveRequests = await this.prisma.leaveRequest.findMany({
       where: {
         organisationId,
         employeeId,
         leaveType,
-        id: excludeLeaveRequestId
-          ? {
-              not: excludeLeaveRequestId,
-            }
-          : undefined,
-        status: {
-          in: [LeaveStatus.PENDING, LeaveStatus.APPROVED],
-        },
+        id: excludeLeaveRequestId ? { not: excludeLeaveRequestId } : undefined,
+        status: { in: [LeaveStatus.PENDING, LeaveStatus.APPROVED] },
       },
-      select: {
-        totalDays: true,
-      },
+      select: { totalDays: true },
     });
 
     const usedOrReservedDays = existingLeaveRequests.reduce(
       (total, request) => total + Number(request.totalDays),
       0,
     );
-
     const availableDays = allocatedDays - usedOrReservedDays;
 
     if (requestedDays > availableDays) {
       throw new BadRequestException(
-        `You only have ${Math.max(
-          availableDays,
-          0,
-        )} day${availableDays === 1 ? '' : 's'} available for ${this.formatLeaveType(
-          leaveType,
-        )}.`,
+        `You only have ${Math.max(availableDays, 0)} day${availableDays === 1 ? '' : 's'} available for ${this.formatLeaveType(leaveType)}.`,
       );
     }
   }
@@ -719,9 +676,7 @@ export class LeaveService {
     organisationId: string,
   ): Promise<OrganisationLeavePolicy> {
     const organisation = await this.prisma.organisation.findUnique({
-      where: {
-        id: organisationId,
-      },
+      where: { id: organisationId },
       select: {
         defaultAnnualLeaveDays: true,
         sickLeaveCycleDays: true,
@@ -743,14 +698,8 @@ export class LeaveService {
     leaveType: LeaveType,
     policy: OrganisationLeavePolicy,
   ) {
-    if (leaveType === LeaveType.ANNUAL) {
-      return policy.defaultAnnualLeaveDays;
-    }
-
-    if (leaveType === LeaveType.SICK) {
-      return policy.sickLeaveCycleDays;
-    }
-
+    if (leaveType === LeaveType.ANNUAL) return policy.defaultAnnualLeaveDays;
+    if (leaveType === LeaveType.SICK) return policy.sickLeaveCycleDays;
     return fallbackLeavePolicyLimits[leaveType];
   }
 
@@ -771,17 +720,11 @@ export class LeaveService {
       policy,
     });
 
-    if (!requiresDocument || hasDocument) {
-      return;
-    }
+    if (!requiresDocument || hasDocument) return;
 
     if (leaveType === LeaveType.SICK) {
       throw new BadRequestException(
-        `Sick leave of ${totalDays} day${
-          totalDays === 1 ? '' : 's'
-        } requires a supporting document. Current policy requires a sick note after ${
-          policy.sickLeaveDocumentThresholdDays
-        } day${policy.sickLeaveDocumentThresholdDays === 1 ? '' : 's'}.`,
+        `Sick leave of ${totalDays} day${totalDays === 1 ? '' : 's'} requires a supporting document. Current policy requires a sick note after ${policy.sickLeaveDocumentThresholdDays} day${policy.sickLeaveDocumentThresholdDays === 1 ? '' : 's'}.`,
       );
     }
 
@@ -802,7 +745,6 @@ export class LeaveService {
     if (leaveType === LeaveType.SICK) {
       return totalDays >= policy.sickLeaveDocumentThresholdDays;
     }
-
     return leaveTypesThatRequireDocuments.includes(leaveType);
   }
 
@@ -810,7 +752,6 @@ export class LeaveService {
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
       throw new BadRequestException('Invalid leave date range.');
     }
-
     if (endDate < startDate) {
       throw new BadRequestException('End date cannot be before start date.');
     }
@@ -818,19 +759,16 @@ export class LeaveService {
 
   private calculateLeaveDays(startDate: Date, endDate: Date) {
     const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
     const start = Date.UTC(
       startDate.getFullYear(),
       startDate.getMonth(),
       startDate.getDate(),
     );
-
     const end = Date.UTC(
       endDate.getFullYear(),
       endDate.getMonth(),
       endDate.getDate(),
     );
-
     return Math.floor((end - start) / millisecondsPerDay) + 1;
   }
 
