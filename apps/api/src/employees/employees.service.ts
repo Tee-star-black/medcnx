@@ -9,6 +9,7 @@ import {
   EmployeeDocumentCategory,
   EmployeeNotificationCategory,
 } from '@prisma/client';
+import { AccessScopeService } from '../auth/access-scope.service';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
 import { EmployeeNotificationService } from '../employee-self-service/employee-notification.service';
@@ -22,13 +23,14 @@ export class EmployeesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: EmployeeNotificationService,
+    private readonly accessScope: AccessScopeService,
   ) {}
 
   async findAll(user: CurrentUser) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+
     return this.prisma.employee.findMany({
-      where: {
-        organisationId: user.organisationId,
-      },
+      where: employeeScope,
       orderBy: {
         createdAt: 'desc',
       },
@@ -74,6 +76,8 @@ export class EmployeesService {
   }
 
   async findOne(user: CurrentUser, id: string) {
+    await this.accessScope.assertEmployeeAccess(user, id);
+
     const employee = await this.prisma.employee.findFirst({
       where: {
         id,
@@ -168,6 +172,8 @@ export class EmployeesService {
   }
 
   async update(user: CurrentUser, id: string, dto: UpdateEmployeeDto) {
+    await this.accessScope.assertEmployeeAccess(user, id);
+
     const existingEmployee = await this.prisma.employee.findFirst({
       where: {
         id,
@@ -258,44 +264,13 @@ export class EmployeesService {
     return employee;
   }
 
-  async remove(user: CurrentUser, id: string) {
-    const employee = await this.prisma.employee.findFirst({
-      where: {
-        id,
-        organisationId: user.organisationId,
-      },
-    });
-
-    if (!employee) {
-      throw new NotFoundException('Employee not found.');
-    }
-
-    await this.prisma.employee.delete({
-      where: {
-        id,
-      },
-    });
-
-    await this.prisma.auditLog.create({
-      data: {
-        organisationId: user.organisationId,
-        actorUserId: user.id,
-        action: AuditAction.DELETE,
-        entity: 'Employee',
-        entityId: employee.id,
-        message: `Employee ${employee.firstName} ${employee.lastName} deleted.`,
-      },
-    });
-
-    return {
-      message: 'Employee deleted successfully.',
-    };
-  }
-
   async findAllEmployeeDocuments(user: CurrentUser) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+
     return this.prisma.employeeDocument.findMany({
       where: {
         organisationId: user.organisationId,
+        employee: employeeScope,
       },
       orderBy: {
         createdAt: 'desc',
@@ -330,6 +305,7 @@ export class EmployeesService {
   }
 
   async findEmployeeDocuments(user: CurrentUser, employeeId: string) {
+    await this.accessScope.assertEmployeeAccess(user, employeeId);
     await this.validateEmployeeBelongsToOrganisation(
       user.organisationId,
       employeeId,
@@ -389,6 +365,7 @@ export class EmployeesService {
     dto: UploadEmployeeDocumentDto,
     file?: Express.Multer.File,
   ) {
+    await this.accessScope.assertEmployeeAccess(user, employeeId);
     const employee = await this.validateEmployeeBelongsToOrganisation(
       user.organisationId,
       employeeId,
@@ -493,10 +470,10 @@ export class EmployeesService {
       user.permissions.includes('employees:read') &&
       user.permissions.includes('documents:download');
 
-    if (!canManageDocuments) {
-      if (!isEmployeeOwner || !document.visibleToEmployee) {
-        throw new ForbiddenException('You cannot access this document.');
-      }
+    if (canManageDocuments) {
+      await this.accessScope.assertEmployeeAccess(user, document.employeeId);
+    } else if (!isEmployeeOwner || !document.visibleToEmployee) {
+      throw new ForbiddenException('You cannot access this document.');
     }
 
     await this.prisma.auditLog.create({
@@ -535,6 +512,8 @@ export class EmployeesService {
     if (!existingDocument) {
       throw new NotFoundException('Employee document not found.');
     }
+
+    await this.accessScope.assertEmployeeAccess(user, existingDocument.employeeId);
 
     const document = await this.prisma.employeeDocument.update({
       where: {
@@ -603,6 +582,8 @@ export class EmployeesService {
     if (!document) {
       throw new NotFoundException('Employee document not found.');
     }
+
+    await this.accessScope.assertEmployeeAccess(user, document.employeeId);
 
     await this.prisma.employeeDocument.delete({
       where: {
