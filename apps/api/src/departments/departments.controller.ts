@@ -29,6 +29,12 @@ export class DepartmentsController {
   }
 
   @RequirePermissions('departments:read')
+  @Get('structure')
+  getStructure(@GetCurrentUser() user: CurrentUser) {
+    return this.departmentsService.getStructure(user);
+  }
+
+  @RequirePermissions('departments:read')
   @Get(':id')
   findOne(@GetCurrentUser() user: CurrentUser, @Param('id') id: string) {
     return this.departmentsService.findOne(user, id);
