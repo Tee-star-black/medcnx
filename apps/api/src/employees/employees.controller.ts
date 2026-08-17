@@ -216,7 +216,7 @@ export class EmployeesController {
     return this.employeesService.update(user, id, updateEmployeeDto);
   }
 
-  @RequirePermissions('employees:update')
+  @RequirePermissions('employees:terminate')
   @Delete(':id')
   remove(@GetCurrentUser() user: CurrentUser, @Param('id') id: string) {
     return this.employeeLifecycleService.terminateEmployee(user, id);
