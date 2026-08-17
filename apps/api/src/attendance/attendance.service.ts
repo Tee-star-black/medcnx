@@ -13,10 +13,11 @@ import {
   type AttendanceCorrectionReason,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { AccessScopeService } from '../auth/access-scope.service';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
-import { MailService } from '../mail/mail.service';
 import { EmployeeNotificationService } from '../employee-self-service/employee-notification.service';
+import { MailService } from '../mail/mail.service';
 
 type AttendanceFilters = {
   date?: string;
@@ -67,21 +68,23 @@ export class AttendanceService {
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly notifications: EmployeeNotificationService,
+    private readonly accessScope: AccessScopeService,
   ) {}
 
   async findAll(user: CurrentUser, filters: AttendanceFilters) {
     const policy = await this.getAttendancePolicy(user.organisationId);
+    const employeeScope = await this.accessScope.employeeWhere(user);
 
     const where: any = {
       organisationId: user.organisationId,
+      employee: filters.departmentId
+        ? { AND: [employeeScope, { departmentId: filters.departmentId }] }
+        : employeeScope,
     };
 
     if (filters.employeeId) {
+      await this.accessScope.assertEmployeeAccess(user, filters.employeeId);
       where.employeeId = filters.employeeId;
-    }
-
-    if (filters.departmentId) {
-      where.employee = { departmentId: filters.departmentId };
     }
 
     if (filters.status) {
@@ -170,7 +173,6 @@ export class AttendanceService {
   async findMyTodayAttendance(user: CurrentUser) {
     const employee = await this.findEmployeeForUser(user);
     const policy = await this.getAttendancePolicy(user.organisationId);
-
     const { startOfDay, endOfDay } = this.getTodayRange();
 
     const record = await this.prisma.attendanceRecord.findFirst({
@@ -187,17 +189,13 @@ export class AttendanceService {
       },
     });
 
-    if (!record) {
-      return null;
-    }
-
+    if (!record) return null;
     return this.withPolicyAnalysis(record, policy);
   }
 
   async clockIn(user: CurrentUser, notes?: string) {
     const employee = await this.findEmployeeForUser(user);
     const policy = await this.getAttendancePolicy(user.organisationId);
-
     const { startOfDay, endOfDay } = this.getTodayRange();
 
     const existingOpenRecord = await this.prisma.attendanceRecord.findFirst({
@@ -207,9 +205,7 @@ export class AttendanceService {
         status: AttendanceStatus.CLOCKED_IN,
         clockOutAt: null,
       },
-      orderBy: {
-        clockInAt: 'desc',
-      },
+      orderBy: { clockInAt: 'desc' },
     });
 
     if (existingOpenRecord) {
@@ -225,9 +221,7 @@ export class AttendanceService {
           lte: endOfDay,
         },
       },
-      orderBy: {
-        clockInAt: 'desc',
-      },
+      orderBy: { clockInAt: 'desc' },
     });
 
     if (existingTodayRecord) {
@@ -257,9 +251,7 @@ export class AttendanceService {
       policy.requireLateAttendanceNote &&
       !this.cleanNotes(notes)
     ) {
-      throw new BadRequestException(
-        'A note is required when clocking in late.',
-      );
+      throw new BadRequestException('A note is required when clocking in late.');
     }
 
     const record = await this.prisma.$transaction(async (transaction) => {
@@ -309,9 +301,7 @@ export class AttendanceService {
         status: AttendanceStatus.CLOCKED_IN,
         clockOutAt: null,
       },
-      orderBy: {
-        clockInAt: 'desc',
-      },
+      orderBy: { clockInAt: 'desc' },
     });
 
     if (!openRecord) {
@@ -319,20 +309,19 @@ export class AttendanceService {
     }
 
     const clockOutAt = new Date();
-
     if (clockOutAt <= openRecord.clockInAt) {
       throw new BadRequestException('Clock-out time must be after clock-in.');
     }
 
     const existingNotes = openRecord.notes?.trim();
     const newNotes = this.cleanNotes(notes);
-
     const updatedNotes = [existingNotes, newNotes].filter(Boolean).join('\n');
 
     const analysis = this.withPolicyAnalysis(
       { ...openRecord, clockOutAt, status: AttendanceStatus.CLOCKED_OUT },
       policy,
     );
+
     if (analysis.earlyClockOutByMinutes > 0 && !policy.allowEarlyClockOut) {
       throw new BadRequestException(
         `Early clock-out is not permitted. Your scheduled end time is ${policy.standardClockOutTime}.`,
@@ -402,10 +391,13 @@ export class AttendanceService {
     user: CurrentUser,
     status?: AttendanceCorrectionStatus,
   ) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
+
     return this.prisma.attendanceCorrectionRequest.findMany({
       where: {
         organisationId: user.organisationId,
         status,
+        employee: employeeScope,
       },
       include: {
         employee: { include: { department: true } },
@@ -529,6 +521,7 @@ export class AttendanceService {
       });
       return correction;
     });
+
     await this.notifyCorrectionReviewers(
       user.organisationId,
       `${employee.firstName ?? user.firstName} ${employee.lastName ?? user.lastName}`,
@@ -546,13 +539,15 @@ export class AttendanceService {
         employeeId: employee.id,
       },
     });
-    if (!correction)
+    if (!correction) {
       throw new NotFoundException('Correction request not found.');
+    }
     if (correction.status !== AttendanceCorrectionStatus.PENDING) {
       throw new BadRequestException(
         'Only pending correction requests can be cancelled.',
       );
     }
+
     return this.prisma.$transaction(async (transaction) => {
       const cancelled = await transaction.attendanceCorrectionRequest.update({
         where: { id: correction.id },
@@ -579,15 +574,22 @@ export class AttendanceService {
     decision: 'APPROVED' | 'REJECTED',
     comments?: string,
   ) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const correction = await this.prisma.attendanceCorrectionRequest.findFirst({
-      where: { id: correctionId, organisationId: user.organisationId },
+      where: {
+        id: correctionId,
+        organisationId: user.organisationId,
+        employee: employeeScope,
+      },
       include: {
         attendanceRecord: true,
         employee: { select: { email: true, firstName: true, lastName: true } },
       },
     });
-    if (!correction)
+
+    if (!correction) {
       throw new NotFoundException('Correction request not found.');
+    }
     if (correction.status !== AttendanceCorrectionStatus.PENDING) {
       throw new BadRequestException(
         'This correction request has already been reviewed.',
@@ -694,6 +696,7 @@ export class AttendanceService {
         return reviewed;
       },
     );
+
     await this.notifyEmployeeCorrectionDecision(
       correction.employee.email,
       correction.employee.firstName,
@@ -716,27 +719,32 @@ export class AttendanceService {
 
   async getDashboardSummary(user: CurrentUser, dateValue?: string) {
     const date = dateValue ? new Date(`${dateValue}T12:00:00`) : new Date();
-    if (Number.isNaN(date.getTime()))
+    if (Number.isNaN(date.getTime())) {
       throw new BadRequestException('Invalid summary date.');
+    }
+
     const policy = await this.getAttendancePolicy(user.organisationId);
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
+
     if (policy.autoMarkMissedClockOut) {
       await this.markMissedClockOuts(user, startOfDay);
     }
+
     const [employees, records, leave, pendingCorrections] = await Promise.all([
       this.prisma.employee.findMany({
         where: {
-          organisationId: user.organisationId,
-          employmentStatus: 'ACTIVE',
+          AND: [employeeScope, { employmentStatus: 'ACTIVE' }],
         },
         include: { department: true },
       }),
       this.prisma.attendanceRecord.findMany({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           clockInAt: { gte: startOfDay, lte: endOfDay },
         },
         include: { employee: { include: { department: true } } },
@@ -744,6 +752,7 @@ export class AttendanceService {
       this.prisma.leaveRequest.findMany({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           status: LeaveStatus.APPROVED,
           startDate: { lte: endOfDay },
           endDate: { gte: startOfDay },
@@ -753,10 +762,12 @@ export class AttendanceService {
       this.prisma.attendanceCorrectionRequest.count({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           status: AttendanceCorrectionStatus.PENDING,
         },
       }),
     ]);
+
     const analysed = records.map((record) =>
       this.withPolicyAnalysis(record, policy),
     );
@@ -775,6 +786,7 @@ export class AttendanceService {
     const compliant = completed.filter(
       (record) => record.policyStatus === 'COMPLIANT',
     ).length;
+
     return {
       date: startOfDay.toISOString(),
       isWorkingDay,
@@ -821,13 +833,14 @@ export class AttendanceService {
         'Provide a valid attendance report date range.',
       );
     }
+
     const records = await this.findAll(user, { dateFrom, dateTo });
     const policy = await this.getAttendancePolicy(user.organisationId);
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const [employees, leaveRequests] = await Promise.all([
       this.prisma.employee.findMany({
         where: {
-          organisationId: user.organisationId,
-          employmentStatus: 'ACTIVE',
+          AND: [employeeScope, { employmentStatus: 'ACTIVE' }],
         },
         include: { department: true },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -835,6 +848,7 @@ export class AttendanceService {
       this.prisma.leaveRequest.findMany({
         where: {
           organisationId: user.organisationId,
+          employee: employeeScope,
           status: LeaveStatus.APPROVED,
           startDate: { lte: to },
           endDate: { gte: from },
@@ -842,6 +856,7 @@ export class AttendanceService {
         select: { employeeId: true, startDate: true, endDate: true },
       }),
     ]);
+
     const expectedDays = this.countWorkingDays(
       from,
       to,
@@ -871,6 +886,7 @@ export class AttendanceService {
       const compliantDays = employeeRecords.filter(
         (record) => record.policyStatus === 'COMPLIANT',
       ).length;
+
       return [
         employee.employeeNumber,
         `${employee.firstName} ${employee.lastName}`,
@@ -894,6 +910,7 @@ export class AttendanceService {
           : 0,
       ];
     });
+
     const header = [
       'Employee Number',
       'Employee Name',
@@ -916,6 +933,7 @@ export class AttendanceService {
           .join(','),
       )
       .join('\r\n');
+
     await this.prisma.auditLog.create({
       data: {
         organisationId: user.organisationId,
@@ -926,6 +944,7 @@ export class AttendanceService {
         metadata: { dateFrom, dateTo, recordCount: records.length },
       },
     });
+
     return {
       fileName: `medcnx-attendance-report-${dateFrom}-${dateTo}.csv`,
       content: `\uFEFF${csv}\r\n`,
@@ -946,16 +965,20 @@ export class AttendanceService {
   }
 
   private async markMissedClockOuts(user: CurrentUser, before: Date) {
+    const employeeScope = await this.accessScope.employeeWhere(user);
     const openRecords = await this.prisma.attendanceRecord.findMany({
       where: {
         organisationId: user.organisationId,
+        employee: employeeScope,
         status: AttendanceStatus.CLOCKED_IN,
         clockOutAt: null,
         clockInAt: { lt: before },
       },
       select: { id: true, employeeId: true, clockInAt: true },
     });
+
     if (openRecords.length === 0) return;
+
     await this.prisma.$transaction(async (transaction) => {
       for (const record of openRecords) {
         await transaction.attendanceRecord.update({
@@ -1064,9 +1087,7 @@ export class AttendanceService {
     organisationId: string,
   ): Promise<OrganisationAttendancePolicy> {
     const organisation = await this.prisma.organisation.findUnique({
-      where: {
-        id: organisationId,
-      },
+      where: { id: organisationId },
       select: {
         standardClockInTime: true,
         standardClockOutTime: true,
@@ -1110,38 +1131,30 @@ export class AttendanceService {
     policy: OrganisationAttendancePolicy,
   ): T & AttendanceRecordWithPolicy {
     const expectedMinutes = policy.defaultWorkingHoursPerDay * 60;
-
     const scheduledClockInMinutes = this.timeToMinutes(
       policy.standardClockInTime,
     );
-
     const scheduledClockOutMinutes = this.timeToMinutes(
       policy.standardClockOutTime,
     );
-
     const actualClockInMinutes = this.dateToMinutes(record.clockInAt);
     const actualClockOutMinutes = record.clockOutAt
       ? this.dateToMinutes(record.clockOutAt)
       : null;
-
     const rawLateByMinutes = Math.max(
       0,
       actualClockInMinutes - scheduledClockInMinutes,
     );
-
     const effectiveLateThreshold =
       policy.lateClockInThresholdMinutes + policy.attendanceGracePeriodMinutes;
     const isLate = rawLateByMinutes > effectiveLateThreshold;
-
     const workedMinutes = record.clockOutAt
       ? this.minutesBetween(record.clockInAt, record.clockOutAt)
       : 0;
-
     const earlyClockOutByMinutes =
       actualClockOutMinutes === null
         ? 0
         : Math.max(0, scheduledClockOutMinutes - actualClockOutMinutes);
-
     const isShortShift =
       record.status === AttendanceStatus.CLOCKED_OUT &&
       workedMinutes > 0 &&
@@ -1149,7 +1162,6 @@ export class AttendanceService {
     const overtimeMinutes = Math.max(0, workedMinutes - expectedMinutes);
 
     let policyStatus: AttendanceRecordWithPolicy['policyStatus'] = 'COMPLIANT';
-
     if (record.status === AttendanceStatus.MISSED_CLOCK_OUT) {
       policyStatus = 'MISSED_CLOCK_OUT';
     } else if (record.status === AttendanceStatus.CLOCKED_IN) {
@@ -1179,7 +1191,6 @@ export class AttendanceService {
 
   private timeToMinutes(value: string) {
     const [hours, minutes] = value.split(':').map(Number);
-
     if (
       Number.isNaN(hours) ||
       Number.isNaN(minutes) ||
@@ -1190,20 +1201,17 @@ export class AttendanceService {
     ) {
       return 0;
     }
-
     return hours * 60 + minutes;
   }
 
   private dateToMinutes(value: Date | string) {
     const date = new Date(value);
-
     return date.getHours() * 60 + date.getMinutes();
   }
 
   private minutesBetween(start: Date | string, end: Date | string) {
     const startTime = new Date(start).getTime();
     const endTime = new Date(end).getTime();
-
     if (
       Number.isNaN(startTime) ||
       Number.isNaN(endTime) ||
@@ -1211,30 +1219,19 @@ export class AttendanceService {
     ) {
       return 0;
     }
-
     return Math.floor((endTime - startTime) / (1000 * 60));
   }
 
   private getTodayRange() {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
-
-    return {
-      startOfDay,
-      endOfDay,
-    };
+    return { startOfDay, endOfDay };
   }
 
   private cleanNotes(notes?: string) {
     const cleanedNotes = notes?.trim();
-
-    if (!cleanedNotes) {
-      return null;
-    }
-
-    return cleanedNotes;
+    return cleanedNotes || null;
   }
 }
