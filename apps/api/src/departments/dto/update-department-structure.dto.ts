@@ -3,11 +3,11 @@ import { IsBoolean, IsOptional, IsString } from 'class-validator';
 export class UpdateDepartmentStructureDto {
   @IsOptional()
   @IsString()
-  parentDepartmentId?: string;
+  parentDepartmentId?: string | null;
 
   @IsOptional()
   @IsString()
-  headEmployeeId?: string;
+  headEmployeeId?: string | null;
 
   @IsOptional()
   @IsBoolean()
