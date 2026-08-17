@@ -1,0 +1,54 @@
+model DepartmentStructure {
+  id                 String   @id @default(uuid())
+  organisationId     String
+  departmentId       String   @unique
+  parentDepartmentId String?
+  headEmployeeId     String?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([organisationId])
+  @@index([parentDepartmentId])
+  @@index([headEmployeeId])
+  @@map("department_structures")
+}
+
+model Position {
+  id                 String   @id @default(uuid())
+  organisationId     String
+  departmentId       String?
+  code               String
+  title              String
+  description        String?
+  level              String?
+  employmentCategory String?
+  approvedHeadcount  Int      @default(0)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organisationId, code])
+  @@index([organisationId])
+  @@index([departmentId])
+  @@index([active])
+  @@map("positions")
+}
+
+model EmployeePositionAssignment {
+  id               String   @id @default(uuid())
+  organisationId   String
+  employeeId       String
+  positionId       String
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  reason           String?
+  assignedByUserId String?
+  createdAt        DateTime @default(now())
+
+  @@index([organisationId])
+  @@index([employeeId])
+  @@index([positionId])
+  @@index([effectiveFrom])
+  @@map("employee_position_assignments")
+}
