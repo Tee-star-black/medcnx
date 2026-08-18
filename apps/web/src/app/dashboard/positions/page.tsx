@@ -185,7 +185,9 @@ export default function PositionsPage() {
     const payload = {
       code: form.code.trim(),
       title: form.title.trim(),
-      departmentId: form.departmentId || undefined,
+      departmentId: editing
+        ? form.departmentId || null
+        : form.departmentId || undefined,
       description: form.description.trim() || undefined,
       level: form.level.trim() || undefined,
       employmentCategory: form.employmentCategory.trim() || undefined,
