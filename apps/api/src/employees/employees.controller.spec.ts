@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EmployeeLifecycleService } from './employee-lifecycle.service';
+import { EmployeeManagerService } from './employee-manager.service';
 import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
 
@@ -12,6 +13,7 @@ describe('EmployeesController', () => {
       providers: [
         { provide: EmployeesService, useValue: {} },
         { provide: EmployeeLifecycleService, useValue: {} },
+        { provide: EmployeeManagerService, useValue: {} },
       ],
     }).compile();
 
