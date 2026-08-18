@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
 import type { AuthUser } from '@/types/auth';
 
 export default function TeamSetupLayout({ children }: { children: ReactNode }) {
@@ -10,23 +11,37 @@ export default function TeamSetupLayout({ children }: { children: ReactNode }) {
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    const rawUser = window.localStorage.getItem('medcnx_user');
+    let active = true;
 
-    if (!rawUser) {
-      router.replace('/');
-      return;
-    }
+    async function verifyAccess() {
+      try {
+        const response = await api.get<AuthUser>('/auth/me');
+        const user = response.data;
+        const isAdministrativeRole = user.roles?.some((role) =>
+          ['SUPER_ADMIN', 'ORG_ADMIN', 'HR_MANAGER'].includes(role),
+        );
+        const canUpdateEmployees = user.permissions?.includes('employees:update');
 
-    try {
-      const user = JSON.parse(rawUser) as AuthUser;
-      if (!user.permissions?.includes('employees:update')) {
-        router.replace('/dashboard/employees');
-        return;
+        if (!canUpdateEmployees && !isAdministrativeRole) {
+          router.replace('/dashboard/employees');
+          return;
+        }
+
+        window.localStorage.setItem('medcnx_user', JSON.stringify(user));
+
+        if (active) {
+          setAllowed(true);
+        }
+      } catch {
+        router.replace('/');
       }
-      setAllowed(true);
-    } catch {
-      router.replace('/');
     }
+
+    void verifyAccess();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   if (!allowed) {
