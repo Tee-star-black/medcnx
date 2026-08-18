@@ -161,6 +161,7 @@ describe('PositionsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      recruitmentHireConversion: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (callback: any) => callback(transaction)),
     } as unknown as PrismaService;
     const accessScope = {} as AccessScopeService;
@@ -190,6 +191,131 @@ describe('PositionsService', () => {
       }),
     });
     expect(transaction.auditLog.create).toHaveBeenCalled();
+    expect(result.vacancySnapshot.remainingUnplannedVacancies).toBe(0);
+  });
+
+  it('reconciles completed hires when calculating active recruiting openings', async () => {
+    const position = {
+      id: 'position-1',
+      organisationId: 'org-1',
+      departmentId: 'department-1',
+      code: 'RN-001',
+      title: 'Registered Nurse',
+      description: null,
+      level: null,
+      employmentCategory: 'FULL_TIME',
+      approvedHeadcount: 4,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const prisma = {
+      position: { findMany: jest.fn().mockResolvedValue([position]) },
+      employeePositionAssignment: {
+        findMany: jest.fn().mockResolvedValue([
+          { positionId: position.id },
+          { positionId: position.id },
+          { positionId: position.id },
+        ]),
+      },
+      recruitmentPositionLink: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            recruitmentJobId: 'job-existing',
+            positionId: position.id,
+            plannedOpenings: 2,
+          },
+        ]),
+      },
+      recruitmentJob: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'job-existing', status: 'OPEN' },
+        ]),
+      },
+      recruitmentHireConversion: {
+        findMany: jest.fn().mockResolvedValue([
+          { recruitmentJobId: 'job-existing' },
+        ]),
+      },
+      department: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'department-1', name: 'Clinical Services' },
+        ]),
+      },
+    } as unknown as PrismaService;
+
+    const service = new PositionsService(prisma, {} as AccessScopeService);
+    const plan = await service.getVacancyPlan(actor);
+
+    expect(plan.positions[0]).toEqual(
+      expect.objectContaining({
+        currentHeadcount: 3,
+        vacancies: 1,
+        recruitingOpenings: 1,
+        unplannedVacancies: 0,
+        staffingStatus: 'RECRUITMENT_IN_PROGRESS',
+      }),
+    );
+    expect(plan.totals.recruitingOpenings).toBe(1);
+  });
+
+  it('uses only unfilled active recruitment openings when checking new recruitment capacity', async () => {
+    const position = {
+      id: 'position-1',
+      organisationId: 'org-1',
+      departmentId: 'department-1',
+      code: 'RN-001',
+      title: 'Registered Nurse',
+      description: null,
+      level: null,
+      employmentCategory: 'FULL_TIME',
+      approvedHeadcount: 5,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const transaction = {
+      recruitmentJob: {
+        create: jest.fn().mockResolvedValue({ id: 'job-new', status: 'OPEN' }),
+      },
+      recruitmentPositionLink: {
+        create: jest.fn().mockResolvedValue({ id: 'link-new' }),
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      position: { findFirst: jest.fn().mockResolvedValue(position) },
+      employeePositionAssignment: { count: jest.fn().mockResolvedValue(3) },
+      recruitmentPositionLink: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            recruitmentJobId: 'job-existing',
+            positionId: position.id,
+            plannedOpenings: 2,
+          },
+        ]),
+      },
+      recruitmentJob: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'job-existing', status: 'OPEN' },
+        ]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      recruitmentHireConversion: {
+        findMany: jest.fn().mockResolvedValue([
+          { recruitmentJobId: 'job-existing' },
+        ]),
+      },
+      $transaction: jest.fn(async (callback: any) => callback(transaction)),
+    } as unknown as PrismaService;
+
+    const service = new PositionsService(prisma, {} as AccessScopeService);
+    const result = await service.createRecruitmentJob(actor, position.id, {
+      reference: 'VAC-RN-002',
+      plannedOpenings: 1,
+    });
+
+    expect(result.vacancySnapshot.alreadyRecruiting).toBe(1);
     expect(result.vacancySnapshot.remainingUnplannedVacancies).toBe(0);
   });
 
@@ -225,6 +351,7 @@ describe('PositionsService', () => {
           { id: 'job-existing', status: 'OPEN' },
         ]),
       },
+      recruitmentHireConversion: { findMany: jest.fn().mockResolvedValue([]) },
     } as unknown as PrismaService;
     const service = new PositionsService(prisma, {} as AccessScopeService);
 
