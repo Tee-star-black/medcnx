@@ -26,6 +26,7 @@ import { CreateMyLeaveRequestDto } from './dto/create-my-leave-request.dto';
 import { RejectLeaveRequestDto } from './dto/reject-leave-request.dto';
 import { UpdateLeaveRequestDto } from './dto/update-leave-request.dto';
 import { LeaveService } from './leave.service';
+import { ManagerLeaveService } from './manager-leave.service';
 
 const leaveDocumentsPath = join(process.cwd(), 'uploads', 'leave-documents');
 
@@ -36,7 +37,10 @@ if (!existsSync(leaveDocumentsPath)) {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('leave')
 export class LeaveController {
-  constructor(private readonly leaveService: LeaveService) {}
+  constructor(
+    private readonly leaveService: LeaveService,
+    private readonly managerLeaveService: ManagerLeaveService,
+  ) {}
 
   @RequirePermissions('leave:read')
   @Get()
@@ -83,6 +87,33 @@ export class LeaveController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.leaveService.createMyLeaveWithDocument(user, dto, file);
+  }
+
+  /*
+   * Manager self-scoped routes.
+   * Access is constrained to the signed-in manager's current direct reports.
+   */
+
+  @Get('manager/pending')
+  findPendingForMyTeam(@GetCurrentUser() user: CurrentUser) {
+    return this.managerLeaveService.findPendingForMyTeam(user);
+  }
+
+  @Patch('manager/:id/approve')
+  approveForMyTeam(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+  ) {
+    return this.managerLeaveService.approve(user, id);
+  }
+
+  @Patch('manager/:id/reject')
+  rejectForMyTeam(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: RejectLeaveRequestDto,
+  ) {
+    return this.managerLeaveService.reject(user, id, dto);
   }
 
   /*
