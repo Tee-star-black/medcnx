@@ -16,7 +16,6 @@ export class UpdateApplicationStatusDto {
     'SCREENING',
     'INTERVIEW',
     'OFFER',
-    'HIRED',
     'REJECTED',
     'WITHDRAWN',
   ])
