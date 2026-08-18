@@ -69,6 +69,11 @@ export class EmployeesController {
     return this.employeesService.findMe(user);
   }
 
+  @Get('me/manager-context')
+  getMyManagerContext(@GetCurrentUser() user: CurrentUser) {
+    return this.employeeManagerService.getMyContext(user);
+  }
+
   @Get('me/documents')
   findMyDocuments(@GetCurrentUser() user: CurrentUser) {
     return this.employeesService.findMyDocuments(user);
