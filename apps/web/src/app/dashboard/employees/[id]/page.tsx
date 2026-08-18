@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { StatusBadge } from '@/components/dashboard/StatusBadge';
+import { EmployeeReportingLines } from '@/components/employees/EmployeeReportingLines';
 import { api } from '@/lib/api';
 
 type EmployeeStatus =
@@ -584,6 +585,8 @@ export default function EmployeeProfilePage() {
             icon={<TrendingUp size={18} />}
           />
         </section>
+
+        <EmployeeReportingLines employeeId={employee.id} />
 
         <section className="grid gap-6 xl:grid-cols-[380px_1fr]">
           <aside className="space-y-6">
