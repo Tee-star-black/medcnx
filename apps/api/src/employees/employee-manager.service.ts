@@ -53,14 +53,12 @@ export class EmployeeManagerService {
         lastName: true,
         email: true,
         phone: true,
+        residentialAddress: true,
         jobTitle: true,
         employmentType: true,
         employmentStatus: true,
         startDate: true,
         endDate: true,
-        city: true,
-        province: true,
-        country: true,
         managerId: true,
         department: {
           select: {
