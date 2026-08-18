@@ -26,13 +26,22 @@ import {
   UpdateDevelopmentPlanDto,
   UpdatePerformanceGoalDto,
 } from './dto/performance.dto';
+import { ManagerPerformanceService } from './manager-performance.service';
 import { PERFORMANCE_PERMISSIONS as P } from './performance.permissions';
 import { PerformanceService } from './performance.service';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('performance')
 export class PerformanceController {
-  constructor(private readonly performance: PerformanceService) {}
+  constructor(
+    private readonly performance: PerformanceService,
+    private readonly managerPerformance: ManagerPerformanceService,
+  ) {}
+
+  @Get('manager/overview')
+  managerOverview(@GetCurrentUser() user: CurrentUser) {
+    return this.managerPerformance.getOverview(user);
+  }
 
   @Get('dashboard')
   @RequirePermissions(P.READ)
