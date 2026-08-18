@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { AxiosError } from 'axios';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -59,6 +60,10 @@ type RecruitmentForm = {
   description: string;
 };
 
+type ApiErrorPayload = {
+  message?: string | string[];
+};
+
 const emptyRecruitmentForm: RecruitmentForm = {
   reference: '',
   plannedOpenings: '1',
@@ -86,8 +91,8 @@ function statusClass(status: StaffingStatus) {
   return 'border-amber-200 bg-amber-50 text-amber-800';
 }
 
-function errorMessage(error: any, fallback: string) {
-  const message = error?.response?.data?.message;
+function errorMessage(error: unknown, fallback: string) {
+  const message = (error as AxiosError<ApiErrorPayload>).response?.data?.message;
   return Array.isArray(message) ? message.join(' ') : message || fallback;
 }
 
@@ -113,7 +118,7 @@ export default function RecruitmentJobsPage() {
     try {
       const response = await api.get<VacancyPlan>('/positions/vacancy-plan');
       setPlan(response.data);
-    } catch (requestError: any) {
+    } catch (requestError: unknown) {
       setError(errorMessage(requestError, 'Could not load workforce vacancy planning.'));
     } finally {
       setLoading(false);
@@ -180,7 +185,7 @@ export default function RecruitmentJobsPage() {
       setSelectedPosition(null);
       setForm(emptyRecruitmentForm);
       await loadPlan();
-    } catch (requestError: any) {
+    } catch (requestError: unknown) {
       setError(errorMessage(requestError, 'Could not open recruitment for this position.'));
     } finally {
       setSubmitting(false);
