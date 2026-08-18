@@ -8,6 +8,22 @@ import type { EmployeeManagerChangeDto } from './dto/employee-manager-change.dto
 export class EmployeeManagerService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getMyContext(user: CurrentUser) {
+    const employee = await this.prisma.employee.findFirst({
+      where: {
+        organisationId: user.organisationId,
+        userId: user.id,
+      },
+      select: { id: true },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('No employee profile is linked to the current user.');
+    }
+
+    return this.getContext(user, employee.id);
+  }
+
   async getContext(user: CurrentUser, employeeId: string) {
     const employee = await this.getEmployee(user, employeeId);
 
