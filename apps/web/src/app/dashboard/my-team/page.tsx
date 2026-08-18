@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   BriefcaseBusiness,
   Loader2,
@@ -206,7 +206,7 @@ function MetricCard({
   label: string;
   value: string;
   helper: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }) {
   return (
     <article className="border border-[var(--border)] bg-[var(--surface)] p-5">
