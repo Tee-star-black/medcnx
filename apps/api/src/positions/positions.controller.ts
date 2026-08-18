@@ -8,12 +8,16 @@ import { AssignPositionDto } from './dto/assign-position.dto';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { CreatePositionRecruitmentJobDto } from './dto/create-position-recruitment-job.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
+import { PositionHistoryService } from './position-history.service';
 import { PositionsService } from './positions.service';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('positions')
 export class PositionsController {
-  constructor(private readonly positionsService: PositionsService) {}
+  constructor(
+    private readonly positionsService: PositionsService,
+    private readonly positionHistoryService: PositionHistoryService,
+  ) {}
 
   @RequirePermissions('departments:read')
   @Get()
@@ -44,6 +48,15 @@ export class PositionsController {
     @Body() dto: AssignPositionDto,
   ) {
     return this.positionsService.assignEmployee(user, employeeId, dto);
+  }
+
+  @RequirePermissions('employees:read')
+  @Get(':id/history')
+  positionHistory(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+  ) {
+    return this.positionHistoryService.getPositionHistory(user, id);
   }
 
   @RequirePermissions('departments:read')
