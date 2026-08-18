@@ -44,6 +44,7 @@ import type { AuthUser } from "@/types/auth";
 type ActivePage =
   | "dashboard"
   | "notifications"
+  | "my-team"
   | "employees"
   | "departments"
   | "leave"
@@ -87,6 +88,14 @@ const navSections: NavSection[] = [
         value: "dashboard",
         icon: LayoutDashboard,
         exact: true,
+      },
+      {
+        label: "My Team",
+        href: "/dashboard/my-team",
+        value: "my-team",
+        icon: UsersRound,
+        exact: true,
+        permissions: ["leave:approve", "employees:read", "performance:read"],
       },
       {
         label: "Notifications",
@@ -228,6 +237,7 @@ const allNavItems = navSections.flatMap((section) => section.items);
 const pageDescriptions: Record<ActivePage, string> = {
   dashboard: "Organisation overview and workforce command centre.",
   notifications: "Review updates, approvals and items requiring attention.",
+  "my-team": "Review your direct reports and current reporting structure.",
   employees: "Manage employee records, profiles and workforce data.",
   departments: "Organise teams, departments and reporting structures.",
   leave: "Review leave requests, balances and approvals.",
