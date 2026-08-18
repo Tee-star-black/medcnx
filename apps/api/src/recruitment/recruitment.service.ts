@@ -41,7 +41,7 @@ function toNumber(value: unknown) {
 
 const allowedApplicationTransitions: Record<
   JobApplicationStatus,
-  readonly JobApplicationStatus[]
+  JobApplicationStatus[]
 > = {
   [JobApplicationStatus.APPLIED]: [
     JobApplicationStatus.SCREENING,
@@ -557,14 +557,14 @@ export class RecruitmentService {
     const nextStatus = dto.status as JobApplicationStatus;
     if (nextStatus === JobApplicationStatus.HIRED) {
       throw new BadRequestException(
-        'Applications can only be marked HIRED through the hire conversion workflow.',
+        'Applications can only be marked HIRED through the dedicated hire conversion workflow.',
       );
     }
 
     const allowedTransitions = allowedApplicationTransitions[application.status];
     if (!allowedTransitions.includes(nextStatus)) {
       throw new BadRequestException(
-        `Application cannot move from ${application.status} to ${nextStatus}.`,
+        `Cannot move an application from ${application.status} to ${nextStatus}.`,
       );
     }
 
