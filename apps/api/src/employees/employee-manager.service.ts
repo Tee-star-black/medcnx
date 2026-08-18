@@ -24,6 +24,60 @@ export class EmployeeManagerService {
     return this.getContext(user, employee.id);
   }
 
+  async getMyDirectReport(user: CurrentUser, employeeId: string) {
+    const manager = await this.prisma.employee.findFirst({
+      where: {
+        organisationId: user.organisationId,
+        userId: user.id,
+      },
+      select: { id: true },
+    });
+
+    if (!manager) {
+      throw new NotFoundException('No employee profile is linked to the current user.');
+    }
+
+    const employee = await this.prisma.employee.findFirst({
+      where: {
+        id: employeeId,
+        organisationId: user.organisationId,
+        managerId: manager.id,
+        employmentStatus: {
+          notIn: [EmploymentStatus.TERMINATED, EmploymentStatus.RESIGNED],
+        },
+      },
+      select: {
+        id: true,
+        employeeNumber: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        jobTitle: true,
+        employmentType: true,
+        employmentStatus: true,
+        startDate: true,
+        endDate: true,
+        city: true,
+        province: true,
+        country: true,
+        managerId: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Direct report not found.');
+    }
+
+    return employee;
+  }
+
   async getContext(user: CurrentUser, employeeId: string) {
     const employee = await this.getEmployee(user, employeeId);
 
