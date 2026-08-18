@@ -15,30 +15,6 @@ import { CreateJobApplicationDto } from './dto/create-job-application.dto';
 import { CreateRecruitmentJobDto } from './dto/create-recruitment-job.dto';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 
-function clean(value?: string | null) {
-  const trimmed = value?.trim();
-
-  return trimmed ? trimmed : null;
-}
-
-function toDate(value?: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function toNumber(value: unknown) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  return Number(value);
-}
-
 const allowedApplicationTransitions: Record<
   JobApplicationStatus,
   JobApplicationStatus[]
@@ -67,6 +43,22 @@ const allowedApplicationTransitions: Record<
   [JobApplicationStatus.WITHDRAWN]: [],
 };
 
+function clean(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function toDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toNumber(value: unknown) {
+  if (value === null || value === undefined) return null;
+  return Number(value);
+}
+
 @Injectable()
 export class RecruitmentService {
   constructor(private readonly prisma: PrismaService) {}
@@ -82,63 +74,32 @@ export class RecruitmentService {
       offerApplications,
       hiredApplications,
     ] = await Promise.all([
+      this.prisma.recruitmentJob.count({ where: { organisationId: user.organisationId } }),
       this.prisma.recruitmentJob.count({
-        where: { organisationId: user.organisationId },
+        where: { organisationId: user.organisationId, status: RecruitmentJobStatus.OPEN },
       }),
-      this.prisma.recruitmentJob.count({
-        where: {
-          organisationId: user.organisationId,
-          status: RecruitmentJobStatus.OPEN,
-        },
-      }),
-      this.prisma.candidate.count({
-        where: { organisationId: user.organisationId },
+      this.prisma.candidate.count({ where: { organisationId: user.organisationId } }),
+      this.prisma.jobApplication.count({ where: { organisationId: user.organisationId } }),
+      this.prisma.jobApplication.count({
+        where: { organisationId: user.organisationId, status: JobApplicationStatus.SCREENING },
       }),
       this.prisma.jobApplication.count({
-        where: { organisationId: user.organisationId },
+        where: { organisationId: user.organisationId, status: JobApplicationStatus.INTERVIEW },
       }),
       this.prisma.jobApplication.count({
-        where: {
-          organisationId: user.organisationId,
-          status: JobApplicationStatus.SCREENING,
-        },
+        where: { organisationId: user.organisationId, status: JobApplicationStatus.OFFER },
       }),
       this.prisma.jobApplication.count({
-        where: {
-          organisationId: user.organisationId,
-          status: JobApplicationStatus.INTERVIEW,
-        },
-      }),
-      this.prisma.jobApplication.count({
-        where: {
-          organisationId: user.organisationId,
-          status: JobApplicationStatus.OFFER,
-        },
-      }),
-      this.prisma.jobApplication.count({
-        where: {
-          organisationId: user.organisationId,
-          status: JobApplicationStatus.HIRED,
-        },
+        where: { organisationId: user.organisationId, status: JobApplicationStatus.HIRED },
       }),
     ]);
 
     const recentApplications = await this.prisma.jobApplication.findMany({
-      where: {
-        organisationId: user.organisationId,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      where: { organisationId: user.organisationId },
+      orderBy: { createdAt: 'desc' },
       take: 8,
       include: {
-        job: {
-          select: {
-            id: true,
-            title: true,
-            reference: true,
-          },
-        },
+        job: { select: { id: true, title: true, reference: true } },
         candidate: {
           select: {
             id: true,
@@ -170,72 +131,36 @@ export class RecruitmentService {
 
   async listJobs(user: CurrentUser) {
     const jobs = await this.prisma.recruitmentJob.findMany({
-      where: {
-        organisationId: user.organisationId,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      where: { organisationId: user.organisationId },
+      orderBy: { createdAt: 'desc' },
       include: {
-        department: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        department: { select: { id: true, name: true } },
         createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
-        _count: {
-          select: {
-            applications: true,
-          },
-        },
+        _count: { select: { applications: true } },
       },
     });
-
     return jobs.map((job) => this.mapJob(job));
   }
 
   async createJob(user: CurrentUser, dto: CreateRecruitmentJobDto) {
     const title = clean(dto.title);
-
-    if (!title) {
-      throw new BadRequestException('Job title is required.');
-    }
+    if (!title) throw new BadRequestException('Job title is required.');
 
     if (dto.departmentId) {
       const department = await this.prisma.department.findFirst({
-        where: {
-          id: dto.departmentId,
-          organisationId: user.organisationId,
-        },
-        select: {
-          id: true,
-        },
+        where: { id: dto.departmentId, organisationId: user.organisationId },
+        select: { id: true },
       });
-
-      if (!department) {
-        throw new NotFoundException('Department not found.');
-      }
+      if (!department) throw new NotFoundException('Department not found.');
     }
 
     if (dto.reference) {
       const existingReference = await this.prisma.recruitmentJob.findFirst({
-        where: {
-          organisationId: user.organisationId,
-          reference: dto.reference,
-        },
-        select: {
-          id: true,
-        },
+        where: { organisationId: user.organisationId, reference: dto.reference },
+        select: { id: true },
       });
-
       if (existingReference) {
         throw new BadRequestException(
           'A recruitment job with this reference already exists.',
@@ -258,25 +183,11 @@ export class RecruitmentService {
         closingDate: toDate(dto.closingDate),
       },
       include: {
-        department: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        department: { select: { id: true, name: true } },
         createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
-        _count: {
-          select: {
-            applications: true,
-          },
-        },
+        _count: { select: { applications: true } },
       },
     });
 
@@ -297,44 +208,26 @@ export class RecruitmentService {
       },
     });
 
-    return {
-      message: 'Recruitment job created.',
-      job: this.mapJob(job),
-    };
+    return { message: 'Recruitment job created.', job: this.mapJob(job) };
   }
 
   async listCandidates(user: CurrentUser) {
     const candidates = await this.prisma.candidate.findMany({
-      where: {
-        organisationId: user.organisationId,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      where: { organisationId: user.organisationId },
+      orderBy: { createdAt: 'desc' },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
-        _count: {
-          select: {
-            applications: true,
-          },
-        },
+        _count: { select: { applications: true } },
       },
     });
-
     return candidates.map((candidate) => this.mapCandidate(candidate));
   }
 
   async createCandidate(user: CurrentUser, dto: CreateCandidateDto) {
     const firstName = clean(dto.firstName);
     const lastName = clean(dto.lastName);
-
     if (!firstName || !lastName) {
       throw new BadRequestException('Candidate first name and last name are required.');
     }
@@ -355,18 +248,9 @@ export class RecruitmentService {
       },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
-        _count: {
-          select: {
-            applications: true,
-          },
-        },
+        _count: { select: { applications: true } },
       },
     });
 
@@ -386,28 +270,16 @@ export class RecruitmentService {
       },
     });
 
-    return {
-      message: 'Candidate created.',
-      candidate: this.mapCandidate(candidate),
-    };
+    return { message: 'Candidate created.', candidate: this.mapCandidate(candidate) };
   }
 
   async listApplications(user: CurrentUser) {
     const applications = await this.prisma.jobApplication.findMany({
-      where: {
-        organisationId: user.organisationId,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      where: { organisationId: user.organisationId },
+      orderBy: { createdAt: 'desc' },
       include: {
         job: {
-          select: {
-            id: true,
-            title: true,
-            reference: true,
-            status: true,
-          },
+          select: { id: true, title: true, reference: true, status: true },
         },
         candidate: {
           select: {
@@ -421,48 +293,28 @@ export class RecruitmentService {
         },
       },
     });
-
     return applications.map((application) => this.mapApplication(application));
   }
 
   async createApplication(user: CurrentUser, dto: CreateJobApplicationDto) {
     const [job, candidate] = await Promise.all([
       this.prisma.recruitmentJob.findFirst({
-        where: {
-          id: dto.jobId,
-          organisationId: user.organisationId,
-        },
-        select: {
-          id: true,
-          title: true,
-          status: true,
-        },
+        where: { id: dto.jobId, organisationId: user.organisationId },
+        select: { id: true, title: true, status: true },
       }),
       this.prisma.candidate.findFirst({
-        where: {
-          id: dto.candidateId,
-          organisationId: user.organisationId,
-        },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-        },
+        where: { id: dto.candidateId, organisationId: user.organisationId },
+        select: { id: true, firstName: true, lastName: true },
       }),
     ]);
 
-    if (!job) {
-      throw new NotFoundException('Recruitment job not found.');
-    }
+    if (!job) throw new NotFoundException('Recruitment job not found.');
     if (job.status !== RecruitmentJobStatus.OPEN) {
       throw new BadRequestException(
-        'Applications can only be added to open recruitment jobs.',
+        'Applications can only be added to OPEN recruitment jobs.',
       );
     }
-
-    if (!candidate) {
-      throw new NotFoundException('Candidate not found.');
-    }
+    if (!candidate) throw new NotFoundException('Candidate not found.');
 
     const existing = await this.prisma.jobApplication.findFirst({
       where: {
@@ -470,11 +322,8 @@ export class RecruitmentService {
         jobId: dto.jobId,
         candidateId: dto.candidateId,
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
-
     if (existing) {
       throw new BadRequestException(
         'This candidate has already been added to this job.',
@@ -492,12 +341,7 @@ export class RecruitmentService {
       },
       include: {
         job: {
-          select: {
-            id: true,
-            title: true,
-            reference: true,
-            status: true,
-          },
+          select: { id: true, title: true, reference: true, status: true },
         },
         candidate: {
           select: {
@@ -540,19 +384,11 @@ export class RecruitmentService {
     dto: UpdateApplicationStatusDto,
   ) {
     const application = await this.prisma.jobApplication.findFirst({
-      where: {
-        id: applicationId,
-        organisationId: user.organisationId,
-      },
-      select: {
-        id: true,
-        status: true,
-      },
+      where: { id: applicationId, organisationId: user.organisationId },
+      select: { id: true, status: true },
     });
 
-    if (!application) {
-      throw new NotFoundException('Job application not found.');
-    }
+    if (!application) throw new NotFoundException('Job application not found.');
 
     const nextStatus = dto.status as JobApplicationStatus;
     if (nextStatus === JobApplicationStatus.HIRED) {
@@ -564,7 +400,7 @@ export class RecruitmentService {
     const allowedTransitions = allowedApplicationTransitions[application.status];
     if (!allowedTransitions.includes(nextStatus)) {
       throw new BadRequestException(
-        `Cannot move an application from ${application.status} to ${nextStatus}.`,
+        `cannot move an application from ${application.status} to ${nextStatus}.`,
       );
     }
 
@@ -607,12 +443,7 @@ export class RecruitmentService {
       },
       include: {
         job: {
-          select: {
-            id: true,
-            title: true,
-            reference: true,
-            status: true,
-          },
+          select: { id: true, title: true, reference: true, status: true },
         },
         candidate: {
           select: {
