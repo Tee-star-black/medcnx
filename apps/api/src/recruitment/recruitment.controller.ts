@@ -15,13 +15,18 @@ import type { CurrentUser } from '../auth/types/current-user.type';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { CreateJobApplicationDto } from './dto/create-job-application.dto';
 import { CreateRecruitmentJobDto } from './dto/create-recruitment-job.dto';
+import { HireApplicationDto } from './dto/hire-application.dto';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
+import { RecruitmentHiringService } from './recruitment-hiring.service';
 import { RecruitmentService } from './recruitment.service';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('recruitment')
 export class RecruitmentController {
-  constructor(private readonly recruitmentService: RecruitmentService) {}
+  constructor(
+    private readonly recruitmentService: RecruitmentService,
+    private readonly recruitmentHiringService: RecruitmentHiringService,
+  ) {}
 
   @RequirePermissions('employees:read')
   @Get()
@@ -72,6 +77,20 @@ export class RecruitmentController {
     @Body() dto: CreateJobApplicationDto,
   ) {
     return this.recruitmentService.createApplication(user, dto);
+  }
+
+  @RequirePermissions('employees:update')
+  @Post('applications/:applicationId/hire')
+  hireApplication(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('applicationId') applicationId: string,
+    @Body() dto: HireApplicationDto,
+  ) {
+    return this.recruitmentHiringService.hireApplication(
+      user,
+      applicationId,
+      dto,
+    );
   }
 
   @RequirePermissions('employees:update')
