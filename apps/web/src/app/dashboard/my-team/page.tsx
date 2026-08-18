@@ -346,7 +346,10 @@ export default function MyTeamPage() {
 
 function TeamMemberCard({ employee }: { employee: EmployeeSummary }) {
   return (
-    <article className="group border border-[var(--border)] bg-[var(--surface-soft)] p-5 transition hover:border-[var(--accent)] hover:bg-[var(--surface)]">
+    <Link
+      href={`/dashboard/my-team/${employee.id}`}
+      className="group block border border-[var(--border)] bg-[var(--surface-soft)] p-5 transition hover:border-[var(--accent)] hover:bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-[var(--accent)] bg-[var(--accent)] text-xs font-black text-[var(--accent-text)]">
@@ -386,11 +389,11 @@ function TeamMemberCard({ employee }: { employee: EmployeeSummary }) {
 
       <div className="mt-5 flex items-center justify-between border-t border-[var(--border)] pt-4 text-xs font-bold text-[var(--muted)]">
         <span>Direct report</span>
-        <span className="inline-flex items-center gap-1 text-[var(--accent)] opacity-0 transition group-hover:opacity-100">
-          Team member <ChevronRight size={14} />
+        <span className="inline-flex items-center gap-1 text-[var(--accent)] transition group-hover:translate-x-0.5">
+          Open team member <ChevronRight size={14} />
         </span>
       </div>
-    </article>
+    </Link>
   );
 }
 
