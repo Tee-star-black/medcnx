@@ -21,6 +21,7 @@ import {
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { ManagerAttendanceExceptions } from '@/components/dashboard/ManagerAttendanceExceptions';
 import { ManagerLeaveApprovals } from '@/components/dashboard/ManagerLeaveApprovals';
+import { ManagerPerformanceWork } from '@/components/dashboard/ManagerPerformanceWork';
 import { StatusBadge } from '@/components/dashboard/StatusBadge';
 import { api } from '@/lib/api';
 
@@ -271,6 +272,7 @@ export default function MyTeamPage() {
 
             <ManagerLeaveApprovals />
             <ManagerAttendanceExceptions />
+            <ManagerPerformanceWork />
 
             <section className="border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xs)]">
               <div className="border-b border-[var(--border)] px-5 py-5 sm:px-6">
