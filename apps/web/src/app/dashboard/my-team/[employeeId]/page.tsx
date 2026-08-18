@@ -26,14 +26,12 @@ type DirectReportDetail = {
   lastName: string;
   email?: string | null;
   phone?: string | null;
+  residentialAddress?: string | null;
   jobTitle?: string | null;
   employmentType?: string | null;
   employmentStatus: string;
   startDate?: string | null;
   endDate?: string | null;
-  city?: string | null;
-  province?: string | null;
-  country?: string | null;
   managerId?: string | null;
   department?: {
     id: string;
@@ -128,10 +126,6 @@ export default function DirectReportDetailPage() {
       </DashboardShell>
     );
   }
-
-  const location = [employee.city, employee.province, employee.country]
-    .filter(Boolean)
-    .join(', ');
 
   return (
     <DashboardShell activePage="my-team">
@@ -240,8 +234,8 @@ export default function DirectReportDetailPage() {
                 icon={<Phone size={17} />}
               />
               <DetailRow
-                label="Location"
-                value={location || 'Not set'}
+                label="Address"
+                value={formatValue(employee.residentialAddress)}
                 icon={<MapPin size={17} />}
               />
               <DetailRow
