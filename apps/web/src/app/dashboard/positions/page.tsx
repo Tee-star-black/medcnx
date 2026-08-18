@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
 import {
@@ -331,7 +331,7 @@ export default function PositionsPage() {
                 <div className="divide-y divide-black/10">
                   {filtered.map((position) => (
                     <article key={position.id} className={`p-5 ${position.active ? '' : 'bg-gray-50 opacity-70'}`}>
-                      <div className="grid gap-5 xl:grid-cols-[1.4fr_repeat(3,110px)_190px] xl:items-center">
+                      <div className="grid gap-5 xl:grid-cols-[1.4fr_repeat(3,110px)_260px] xl:items-center">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`border px-2 py-1 text-[11px] font-medium ${position.active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
@@ -339,7 +339,9 @@ export default function PositionsPage() {
                             </span>
                             <span className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">{position.code}</span>
                           </div>
-                          <h2 className="mt-2 text-base font-semibold text-[#111827]">{position.title}</h2>
+                          <Link href={`/dashboard/positions/${position.id}`} className="mt-2 inline-block text-base font-semibold text-[#111827] hover:underline">
+                            {position.title}
+                          </Link>
                           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                             <Building2 size={14} />
                             {position.department?.name ?? 'No department'}
@@ -353,6 +355,12 @@ export default function PositionsPage() {
                         <Count label="Vacant" value={position.vacancies} />
 
                         <div className="flex flex-wrap gap-2 xl:justify-end">
+                          <Link
+                            href={`/dashboard/positions/${position.id}`}
+                            className="inline-flex items-center gap-2 border border-black/10 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:border-black hover:text-black"
+                          >
+                            View details
+                          </Link>
                           {position.active ? (
                             <>
                               <button
@@ -492,7 +500,7 @@ function Count({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <label className="block">
       <span className="mb-2 block text-sm font-medium text-[#111827]">{label}{required ? ' *' : ''}</span>
