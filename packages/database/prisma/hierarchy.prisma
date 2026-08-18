@@ -54,15 +54,33 @@ model EmployeePositionAssignment {
 }
 
 model RecruitmentPositionLink {
-  id             String   @id @default(uuid())
-  organisationId String
-  recruitmentJobId String @unique
-  positionId     String
-  plannedOpenings Int     @default(1)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(uuid())
+  organisationId   String
+  recruitmentJobId String   @unique
+  positionId       String
+  plannedOpenings  Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([organisationId])
   @@index([positionId])
   @@map("recruitment_position_links")
+}
+
+model RecruitmentHireConversion {
+  id               String   @id @default(uuid())
+  organisationId   String
+  applicationId    String   @unique
+  candidateId      String
+  employeeId       String   @unique
+  positionId       String?
+  recruitmentJobId String
+  convertedByUserId String
+  convertedAt      DateTime @default(now())
+
+  @@index([organisationId])
+  @@index([candidateId])
+  @@index([positionId])
+  @@index([recruitmentJobId])
+  @@map("recruitment_hire_conversions")
 }
