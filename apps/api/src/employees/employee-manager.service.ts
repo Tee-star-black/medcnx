@@ -152,6 +152,15 @@ export class EmployeeManagerService {
     if (Number.isNaN(effectiveDate.getTime())) {
       throw new BadRequestException('A valid manager effective date is required.');
     }
+
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    if (effectiveDate > endOfToday) {
+      throw new BadRequestException(
+        'Manager effective date cannot be in the future until scheduled reporting changes are supported.',
+      );
+    }
+
     if (employee.managerId === nextManagerId) {
       throw new BadRequestException('Employee already has this manager assignment.');
     }
