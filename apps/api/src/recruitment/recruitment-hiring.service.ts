@@ -47,16 +47,15 @@ export class RecruitmentHiringService {
     if (!application) {
       throw new NotFoundException('Job application not found.');
     }
-    if (
-      application.status === JobApplicationStatus.REJECTED ||
-      application.status === JobApplicationStatus.WITHDRAWN
-    ) {
+    if (application.status !== JobApplicationStatus.OFFER) {
       throw new BadRequestException(
-        'Rejected or withdrawn applications cannot be hired.',
+        'Only applications in OFFER status can be hired.',
       );
     }
-    if (application.job.status === RecruitmentJobStatus.CLOSED) {
-      throw new BadRequestException('Closed recruitment jobs cannot accept hires.');
+    if (application.job.status !== RecruitmentJobStatus.OPEN) {
+      throw new BadRequestException(
+        'Only open recruitment jobs can accept hires.',
+      );
     }
 
     const existingConversion = await this.prisma.recruitmentHireConversion.findFirst({
