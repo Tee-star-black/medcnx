@@ -23,20 +23,31 @@ describe('RecruitmentHiringService guardrails', () => {
     startDate: '2026-09-01',
   };
 
-  it('rejects hiring before the application reaches OFFER', async () => {
-    const prisma = {
+  function prismaWithApplication(application: any) {
+    const transaction = {
       jobApplication: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'application-1',
-          organisationId: 'org-1',
-          jobId: 'job-1',
-          candidateId: 'candidate-1',
-          status: JobApplicationStatus.INTERVIEW,
-          candidate: { firstName: 'Naledi', lastName: 'Dube' },
-          job: { status: RecruitmentJobStatus.OPEN },
-        }),
+        findFirst: jest.fn().mockResolvedValue(application),
       },
-    } as unknown as PrismaService;
+    };
+
+    return {
+      prisma: {
+        $transaction: jest.fn(async (callback: any) => callback(transaction)),
+      } as unknown as PrismaService,
+      transaction,
+    };
+  }
+
+  it('rejects hiring before the application reaches OFFER', async () => {
+    const { prisma } = prismaWithApplication({
+      id: 'application-1',
+      organisationId: 'org-1',
+      jobId: 'job-1',
+      candidateId: 'candidate-1',
+      status: JobApplicationStatus.INTERVIEW,
+      candidate: { firstName: 'Naledi', lastName: 'Dube' },
+      job: { status: RecruitmentJobStatus.OPEN },
+    });
 
     const service = new RecruitmentHiringService(prisma);
 
@@ -46,19 +57,15 @@ describe('RecruitmentHiringService guardrails', () => {
   });
 
   it('rejects hiring while the recruitment job is on hold', async () => {
-    const prisma = {
-      jobApplication: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'application-1',
-          organisationId: 'org-1',
-          jobId: 'job-1',
-          candidateId: 'candidate-1',
-          status: JobApplicationStatus.OFFER,
-          candidate: { firstName: 'Naledi', lastName: 'Dube' },
-          job: { status: RecruitmentJobStatus.ON_HOLD },
-        }),
-      },
-    } as unknown as PrismaService;
+    const { prisma } = prismaWithApplication({
+      id: 'application-1',
+      organisationId: 'org-1',
+      jobId: 'job-1',
+      candidateId: 'candidate-1',
+      status: JobApplicationStatus.OFFER,
+      candidate: { firstName: 'Naledi', lastName: 'Dube' },
+      job: { status: RecruitmentJobStatus.ON_HOLD },
+    });
 
     const service = new RecruitmentHiringService(prisma);
 
