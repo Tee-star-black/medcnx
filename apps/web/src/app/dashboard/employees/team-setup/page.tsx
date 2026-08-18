@@ -134,8 +134,16 @@ export default function TeamSetupPage() {
     );
   }
 
+  function hasValidEffectiveDate() {
+    return Boolean(effectiveDate) && effectiveDate <= todayIsoDate();
+  }
+
   async function assignSelected() {
     if (!managerId || selectedIds.length === 0) return;
+    if (!hasValidEffectiveDate()) {
+      setError('Effective date cannot be in the future.');
+      return;
+    }
     if (reason.trim().length < 3) {
       setError('Enter a reason of at least 3 characters.');
       return;
@@ -176,6 +184,10 @@ export default function TeamSetupPage() {
   }
 
   async function removeFromTeam(employee: Employee) {
+    if (!hasValidEffectiveDate()) {
+      setError('Effective date cannot be in the future.');
+      return;
+    }
     if (!window.confirm(`Remove ${fullName(employee)} from ${manager ? fullName(manager) : 'this manager'}'s team?`)) {
       return;
     }
@@ -279,6 +291,7 @@ export default function TeamSetupPage() {
                 <input
                   type="date"
                   value={effectiveDate}
+                  max={todayIsoDate()}
                   onChange={(event) => setEffectiveDate(event.target.value)}
                   className="mt-2 h-11 w-full border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 text-sm font-semibold text-[var(--text)] outline-none focus:border-[var(--accent)]"
                 />
@@ -427,7 +440,7 @@ export default function TeamSetupPage() {
                     <button
                       type="button"
                       onClick={() => void assignSelected()}
-                      disabled={saving || selectedIds.length === 0 || !effectiveDate || reason.trim().length < 3}
+                      disabled={saving || selectedIds.length === 0 || !hasValidEffectiveDate() || reason.trim().length < 3}
                       className="inline-flex h-11 items-center justify-center gap-2 border border-[var(--accent)] bg-[var(--accent)] px-5 text-sm font-black text-[var(--accent-text)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {saving ? <Loader2 className="animate-spin" size={16} /> : <UsersRound size={17} />}
