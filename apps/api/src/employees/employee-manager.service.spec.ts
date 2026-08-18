@@ -165,13 +165,13 @@ describe('EmployeeManagerService', () => {
     const service = new EmployeeManagerService(prisma);
     const result = await service.changeManager(user, employee.id, {
       managerId: 'manager-new',
-      effectiveDate: '2026-09-01T00:00:00.000Z',
+      effectiveDate: '2026-08-01T00:00:00.000Z',
       reason: 'Approved reporting line change.',
     });
 
     expect(transaction.employeeManagerAssignment.update).toHaveBeenCalledWith({
       where: { id: 'manager-assignment-1' },
-      data: { effectiveTo: new Date('2026-09-01T00:00:00.000Z') },
+      data: { effectiveTo: new Date('2026-08-01T00:00:00.000Z') },
     });
     expect(transaction.employeeManagerAssignment.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -186,6 +186,33 @@ describe('EmployeeManagerService', () => {
     });
     expect(transaction.auditLog.create).toHaveBeenCalled();
     expect(result.employee.managerId).toBe('manager-new');
+  });
+
+  it('rejects future manager effective dates before changing live reporting state', async () => {
+    const employee = {
+      id: 'employee-1',
+      organisationId: 'org-1',
+      managerId: 'manager-old',
+      employmentStatus: EmploymentStatus.ACTIVE,
+    };
+    const prisma = {
+      employee: {
+        findFirst: jest.fn().mockResolvedValue(employee),
+      },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+
+    const service = new EmployeeManagerService(prisma);
+
+    await expect(
+      service.changeManager(user, employee.id, {
+        managerId: 'manager-new',
+        effectiveDate: '2099-01-01T00:00:00.000Z',
+        reason: 'Future reporting change.',
+      }),
+    ).rejects.toThrow('cannot be in the future');
+
+    expect((prisma.$transaction as jest.Mock)).not.toHaveBeenCalled();
   });
 
   it('rejects self-management', async () => {
@@ -205,7 +232,7 @@ describe('EmployeeManagerService', () => {
     await expect(
       service.changeManager(user, 'employee-1', {
         managerId: 'employee-1',
-        effectiveDate: '2026-09-01T00:00:00.000Z',
+        effectiveDate: '2026-08-01T00:00:00.000Z',
         reason: 'Invalid self assignment.',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -232,7 +259,7 @@ describe('EmployeeManagerService', () => {
     await expect(
       service.changeManager(user, 'employee-1', {
         managerId: 'manager-1',
-        effectiveDate: '2026-09-01T00:00:00.000Z',
+        effectiveDate: '2026-08-01T00:00:00.000Z',
         reason: 'Invalid cycle.',
       }),
     ).rejects.toThrow('reporting cycle');
