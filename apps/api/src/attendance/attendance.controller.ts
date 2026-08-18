@@ -20,11 +20,15 @@ import { AttendanceService } from './attendance.service';
 import { ATTENDANCE_PERMISSIONS } from './attendance.permissions';
 import { CreateAttendanceCorrectionDto } from './dto/create-attendance-correction.dto';
 import { ReviewAttendanceCorrectionDto } from './dto/review-attendance-correction.dto';
+import { ManagerAttendanceService } from './manager-attendance.service';
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('attendance')
 export class AttendanceController {
-  constructor(private readonly attendanceService: AttendanceService) {}
+  constructor(
+    private readonly attendanceService: AttendanceService,
+    private readonly managerAttendanceService: ManagerAttendanceService,
+  ) {}
 
   @RequirePermissions(ATTENDANCE_PERMISSIONS.VIEW_ORGANISATION)
   @Get()
@@ -93,6 +97,15 @@ export class AttendanceController {
     @Param('correctionId') correctionId: string,
   ) {
     return this.attendanceService.cancelCorrection(user, correctionId);
+  }
+
+  @Get('manager/exceptions')
+  findManagerExceptions(
+    @GetCurrentUser() user: CurrentUser,
+    @Query('days') days?: string,
+  ) {
+    const parsedDays = days ? Number(days) : 14;
+    return this.managerAttendanceService.findExceptions(user, parsedDays);
   }
 
   @Get('corrections')
