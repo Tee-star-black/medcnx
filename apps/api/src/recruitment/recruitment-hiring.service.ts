@@ -9,6 +9,7 @@ import {
   JobApplicationStatus,
   RecruitmentJobStatus,
 } from '@prisma/client';
+import type { EmployeePositionAssignment } from '@prisma/client';
 import type { CurrentUser } from '../auth/types/current-user.type';
 import { PrismaService } from '../database/prisma.service';
 import { HireApplicationDto } from './dto/hire-application.dto';
@@ -136,7 +137,7 @@ export class RecruitmentHiringService {
         },
       });
 
-      let assignment = null;
+      let assignment: EmployeePositionAssignment | null = null;
       if (position) {
         assignment = await transaction.employeePositionAssignment.create({
           data: {
