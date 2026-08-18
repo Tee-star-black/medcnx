@@ -74,6 +74,14 @@ export class EmployeesController {
     return this.employeeManagerService.getMyContext(user);
   }
 
+  @Get('me/direct-reports/:employeeId')
+  getMyDirectReport(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('employeeId') employeeId: string,
+  ) {
+    return this.employeeManagerService.getMyDirectReport(user, employeeId);
+  }
+
   @Get('me/documents')
   findMyDocuments(@GetCurrentUser() user: CurrentUser) {
     return this.employeesService.findMyDocuments(user);
