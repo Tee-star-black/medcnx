@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EmploymentStatus } from '@prisma/client';
 import { EmployeeManagerService } from './employee-manager.service';
 import { PrismaService } from '../database/prisma.service';
@@ -15,6 +15,63 @@ describe('EmployeeManagerService', () => {
     permissions: ['employees:update', 'employees:read'],
     sessionId: 'session-1',
   };
+
+  it('resolves manager context from the employee linked to the current user', async () => {
+    const currentEmployee = {
+      id: 'manager-employee',
+      organisationId: 'org-1',
+      employeeNumber: 'EMP-010',
+      firstName: 'HR',
+      lastName: 'Manager',
+      jobTitle: 'Team Lead',
+      managerId: null,
+      employmentStatus: EmploymentStatus.ACTIVE,
+    };
+    const directReport = {
+      id: 'employee-1',
+      employeeNumber: 'EMP-011',
+      firstName: 'Naledi',
+      lastName: 'Dube',
+      jobTitle: 'Nurse',
+      employmentStatus: EmploymentStatus.ACTIVE,
+      departmentId: 'dept-1',
+    };
+    const prisma = {
+      employee: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({ id: currentEmployee.id })
+          .mockResolvedValueOnce(currentEmployee),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([directReport])
+          .mockResolvedValueOnce([]),
+      },
+      employeeManagerAssignment: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    } as unknown as PrismaService;
+
+    const service = new EmployeeManagerService(prisma);
+    const result = await service.getMyContext(user);
+
+    expect((prisma.employee.findFirst as jest.Mock).mock.calls[0][0]).toEqual({
+      where: { organisationId: user.organisationId, userId: user.id },
+      select: { id: true },
+    });
+    expect(result.employee.id).toBe(currentEmployee.id);
+    expect(result.directReports).toEqual([directReport]);
+  });
+
+  it('rejects self context when the user has no linked employee profile', async () => {
+    const prisma = {
+      employee: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+
+    const service = new EmployeeManagerService(prisma);
+
+    await expect(service.getMyContext(user)).rejects.toBeInstanceOf(NotFoundException);
+  });
 
   it('closes the previous manager assignment and creates a new effective-dated assignment', async () => {
     const employee = {
