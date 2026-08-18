@@ -53,6 +53,24 @@ model EmployeePositionAssignment {
   @@map("employee_position_assignments")
 }
 
+model EmployeeManagerAssignment {
+  id               String   @id @default(uuid())
+  organisationId   String
+  employeeId       String
+  managerId        String?
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  reason           String?
+  assignedByUserId String?
+  createdAt        DateTime @default(now())
+
+  @@index([organisationId])
+  @@index([employeeId])
+  @@index([managerId])
+  @@index([effectiveFrom])
+  @@map("employee_manager_assignments")
+}
+
 model RecruitmentPositionLink {
   id               String   @id @default(uuid())
   organisationId   String
