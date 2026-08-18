@@ -1,4 +1,13 @@
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 
 export class UpdatePositionDto {
   @IsOptional()
@@ -14,8 +23,9 @@ export class UpdatePositionDto {
   title?: string;
 
   @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
   @IsString()
-  departmentId?: string;
+  departmentId?: string | null;
 
   @IsOptional()
   @IsString()
