@@ -73,6 +73,56 @@ describe('EmployeeManagerService', () => {
     await expect(service.getMyContext(user)).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('returns a direct report only when the employee reports to the current user', async () => {
+    const report = {
+      id: 'employee-1',
+      employeeNumber: 'EMP-011',
+      firstName: 'Naledi',
+      lastName: 'Dube',
+      employmentStatus: EmploymentStatus.ACTIVE,
+      managerId: 'manager-employee',
+    };
+    const prisma = {
+      employee: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'manager-employee' })
+          .mockResolvedValueOnce(report),
+      },
+    } as unknown as PrismaService;
+
+    const service = new EmployeeManagerService(prisma);
+    const result = await service.getMyDirectReport(user, report.id);
+
+    expect((prisma.employee.findFirst as jest.Mock).mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: report.id,
+          organisationId: user.organisationId,
+          managerId: 'manager-employee',
+        }),
+      }),
+    );
+    expect(result).toEqual(report);
+  });
+
+  it('rejects access to an employee outside the current manager direct reports', async () => {
+    const prisma = {
+      employee: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'manager-employee' })
+          .mockResolvedValueOnce(null),
+      },
+    } as unknown as PrismaService;
+
+    const service = new EmployeeManagerService(prisma);
+
+    await expect(service.getMyDirectReport(user, 'employee-outside-team')).rejects.toThrow(
+      'Direct report not found',
+    );
+  });
+
   it('closes the previous manager assignment and creates a new effective-dated assignment', async () => {
     const employee = {
       id: 'employee-1',
