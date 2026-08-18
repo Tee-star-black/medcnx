@@ -8,6 +8,7 @@ import {
   BriefcaseBusiness,
   Building2,
   CheckCircle2,
+  LayoutList,
   Loader2,
   Plus,
   RefreshCw,
@@ -216,15 +217,24 @@ export default function RecruitmentJobsPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={loadPlan}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-5 py-3 text-sm font-medium text-gray-600 transition hover:border-black hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/dashboard/positions"
+              className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-black hover:text-black"
+            >
+              <LayoutList size={16} />
+              Position catalogue
+            </Link>
+            <button
+              type="button"
+              onClick={loadPlan}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-5 py-3 text-sm font-medium text-gray-600 transition hover:border-black hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
         </section>
 
         {error ? (
