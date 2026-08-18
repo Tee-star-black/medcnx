@@ -3,10 +3,11 @@ import { AuthModule } from '../auth/auth.module';
 import { EmployeeSelfServiceModule } from '../employee-self-service/employee-self-service.module';
 import { LeaveController } from './leave.controller';
 import { LeaveService } from './leave.service';
+import { ManagerLeaveService } from './manager-leave.service';
 
 @Module({
   imports: [AuthModule, EmployeeSelfServiceModule],
   controllers: [LeaveController],
-  providers: [LeaveService],
+  providers: [LeaveService, ManagerLeaveService],
 })
 export class LeaveModule {}
