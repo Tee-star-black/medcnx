@@ -103,20 +103,39 @@ export class PositionsService {
     ]);
 
     const jobIds = recruitmentLinks.map((link) => link.recruitmentJobId);
-    const activeJobs = jobIds.length
-      ? await this.prisma.recruitmentJob.findMany({
-          where: {
-            organisationId: user.organisationId,
-            id: { in: jobIds },
-            status: {
-              in: [RecruitmentJobStatus.OPEN, RecruitmentJobStatus.ON_HOLD],
+    const [activeJobs, hireConversions] = await Promise.all([
+      jobIds.length
+        ? this.prisma.recruitmentJob.findMany({
+            where: {
+              organisationId: user.organisationId,
+              id: { in: jobIds },
+              status: {
+                in: [RecruitmentJobStatus.OPEN, RecruitmentJobStatus.ON_HOLD],
+              },
             },
-          },
-          select: { id: true, status: true },
-        })
-      : [];
+            select: { id: true, status: true },
+          })
+        : [],
+      jobIds.length
+        ? this.prisma.recruitmentHireConversion.findMany({
+            where: {
+              organisationId: user.organisationId,
+              recruitmentJobId: { in: jobIds },
+            },
+            select: { recruitmentJobId: true },
+          })
+        : [],
+    ]);
 
     const activeJobIds = new Set(activeJobs.map((job) => job.id));
+    const completedHiresByJob = new Map<string, number>();
+    for (const conversion of hireConversions) {
+      completedHiresByJob.set(
+        conversion.recruitmentJobId,
+        (completedHiresByJob.get(conversion.recruitmentJobId) ?? 0) + 1,
+      );
+    }
+
     const occupiedByPosition = new Map<string, number>();
     for (const assignment of assignments) {
       occupiedByPosition.set(
@@ -128,9 +147,11 @@ export class PositionsService {
     const recruitingByPosition = new Map<string, number>();
     for (const link of recruitmentLinks) {
       if (!activeJobIds.has(link.recruitmentJobId)) continue;
+      const completedHires = completedHiresByJob.get(link.recruitmentJobId) ?? 0;
+      const remainingOpenings = Math.max(link.plannedOpenings - completedHires, 0);
       recruitingByPosition.set(
         link.positionId,
-        (recruitingByPosition.get(link.positionId) ?? 0) + link.plannedOpenings,
+        (recruitingByPosition.get(link.positionId) ?? 0) + remainingOpenings,
       );
     }
 
@@ -441,9 +462,35 @@ export class PositionsService {
         })
       : [];
     const activeJobIds = new Set(activeJobs.map((job) => job.id));
+    const activeJobIdList = [...activeJobIds];
+    const hireConversions = activeJobIdList.length
+      ? await this.prisma.recruitmentHireConversion.findMany({
+          where: {
+            organisationId: user.organisationId,
+            recruitmentJobId: { in: activeJobIdList },
+          },
+          select: { recruitmentJobId: true },
+        })
+      : [];
+    const completedHiresByJob = new Map<string, number>();
+    for (const conversion of hireConversions) {
+      completedHiresByJob.set(
+        conversion.recruitmentJobId,
+        (completedHiresByJob.get(conversion.recruitmentJobId) ?? 0) + 1,
+      );
+    }
     const alreadyRecruiting = existingLinks
       .filter((link) => activeJobIds.has(link.recruitmentJobId))
-      .reduce((total, link) => total + link.plannedOpenings, 0);
+      .reduce(
+        (total, link) =>
+          total +
+          Math.max(
+            link.plannedOpenings -
+              (completedHiresByJob.get(link.recruitmentJobId) ?? 0),
+            0,
+          ),
+        0,
+      );
     const remainingVacancies = Math.max(vacancies - alreadyRecruiting, 0);
     const plannedOpenings = dto.plannedOpenings ?? 1;
 
