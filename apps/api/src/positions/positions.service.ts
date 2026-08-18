@@ -312,7 +312,7 @@ export class PositionsService {
   async update(user: CurrentUser, positionId: string, dto: UpdatePositionDto) {
     const existing = await this.getPosition(user, positionId);
 
-    if (dto.departmentId) {
+    if (dto.departmentId !== undefined && dto.departmentId !== null) {
       await this.assertDepartment(user, dto.departmentId);
     }
 
@@ -332,7 +332,8 @@ export class PositionsService {
       data: {
         code: dto.code?.trim(),
         title: dto.title?.trim(),
-        departmentId: dto.departmentId,
+        departmentId:
+          dto.departmentId === undefined ? undefined : dto.departmentId,
         description: dto.description?.trim(),
         level: dto.level?.trim(),
         employmentCategory: dto.employmentCategory?.trim(),
