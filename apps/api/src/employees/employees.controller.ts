@@ -32,6 +32,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { UploadEmployeeDocumentDto } from './dto/upload-employee-document.dto';
 import { UpdateEmployeeDocumentDto } from './dto/update-employee-document.dto';
 import { EmployeeLifecycleService } from './employee-lifecycle.service';
+import { EmployeeManagerService } from './employee-manager.service';
 import { EmployeesService } from './employees.service';
 
 const employeeDocumentsUploadDestination = join(
@@ -54,6 +55,7 @@ export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,
     private readonly employeeLifecycleService: EmployeeLifecycleService,
+    private readonly employeeManagerService: EmployeeManagerService,
   ) {}
 
   @RequirePermissions('employees:read')
@@ -155,6 +157,15 @@ export class EmployeesController {
     return this.employeeLifecycleService.getHistory(user, id);
   }
 
+  @RequirePermissions('employees:read')
+  @Get(':id/manager-context')
+  getManagerContext(
+    @GetCurrentUser() user: CurrentUser,
+    @Param('id') id: string,
+  ) {
+    return this.employeeManagerService.getContext(user, id);
+  }
+
   @RequirePermissions('employees:update')
   @Post(':id/employment/promote')
   promoteEmployee(
@@ -182,7 +193,7 @@ export class EmployeesController {
     @Param('id') id: string,
     @Body() dto: EmployeeManagerChangeDto,
   ) {
-    return this.employeeLifecycleService.changeManager(user, id, dto);
+    return this.employeeManagerService.changeManager(user, id, dto);
   }
 
   @RequirePermissions('employees:update')
