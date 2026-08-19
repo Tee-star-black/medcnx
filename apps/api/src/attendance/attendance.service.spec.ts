@@ -3,6 +3,7 @@ import {
   AttendanceCorrectionReason,
   AttendanceCorrectionStatus,
   AttendanceStatus,
+  EmploymentStatus,
 } from '@prisma/client';
 
 import { AttendanceService } from './attendance.service';
@@ -283,6 +284,51 @@ describe('AttendanceService V1', () => {
     expect(summary.missingClockIns).toBe(0);
   });
 
+  it('selects dashboard employees by employment overlap instead of current status', async () => {
+    prisma.employee.findMany.mockResolvedValue([]);
+    prisma.attendanceRecord.findMany.mockResolvedValue([]);
+    prisma.leaveRequest.findMany.mockResolvedValue([]);
+    prisma.attendanceCorrectionRequest.count.mockResolvedValue(0);
+
+    await service.getDashboardSummary(user, '2026-07-15');
+
+    expect(prisma.employee.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { organisationId: 'organisation-1' },
+            expect.objectContaining({
+              AND: expect.arrayContaining([
+                expect.objectContaining({
+                  OR: expect.arrayContaining([
+                    expect.objectContaining({
+                      employmentStatus: {
+                        in: [
+                          EmploymentStatus.ACTIVE,
+                          EmploymentStatus.ON_LEAVE,
+                          EmploymentStatus.SUSPENDED,
+                        ],
+                      },
+                    }),
+                    expect.objectContaining({
+                      employmentStatus: {
+                        in: [
+                          EmploymentStatus.TERMINATED,
+                          EmploymentStatus.RESIGNED,
+                        ],
+                      },
+                      endDate: { not: null },
+                    }),
+                  ]),
+                }),
+              ]),
+            }),
+          ],
+        },
+      }),
+    );
+  });
+
   it('rejects an invalid attendance status filter', async () => {
     await expect(
       service.findAll(user, { status: 'NOT_A_STATUS' }),
@@ -299,6 +345,8 @@ describe('AttendanceService V1', () => {
         employeeNumber: 'MED-001',
         firstName: 'Test',
         lastName: 'Employee',
+        startDate: null,
+        endDate: null,
         department: { name: 'Clinical' },
       },
     ]);
@@ -317,6 +365,39 @@ describe('AttendanceService V1', () => {
       dateFrom: '2026-07-01',
       dateTo: '2026-07-31',
     });
+    findAll.mockRestore();
+  });
+
+  it('clips expected attendance days to the employee employment period', async () => {
+    const findAll = jest
+      .spyOn(service, 'findAll')
+      .mockResolvedValue([] as never);
+    prisma.employee.findMany.mockResolvedValue([
+      {
+        id: 'employee-1',
+        employeeNumber: 'MED-001',
+        firstName: 'Former',
+        lastName: 'Employee',
+        employmentStatus: EmploymentStatus.TERMINATED,
+        startDate: new Date('2026-07-15T00:00:00.000Z'),
+        endDate: new Date('2026-07-17T23:59:59.999Z'),
+        department: { name: 'Clinical' },
+      },
+    ]);
+    prisma.leaveRequest.findMany.mockResolvedValue([]);
+    prisma.auditLog.create.mockResolvedValue({});
+
+    const report = await service.exportAttendanceReport(
+      user,
+      '2026-07-01',
+      '2026-07-31',
+    );
+    const rows = report.content.trim().split('\r\n');
+    const values = rows[1].split(',').map((value) => value.replaceAll('"', ''));
+
+    expect(values[0]).toBe('MED-001');
+    expect(values[3]).toBe('3');
+    expect(values[6]).toBe('3');
     findAll.mockRestore();
   });
 });
