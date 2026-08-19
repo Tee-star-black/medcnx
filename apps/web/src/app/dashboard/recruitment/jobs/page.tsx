@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   BriefcaseBusiness,
   Building2,
   CheckCircle2,
@@ -13,11 +12,15 @@ import {
   Plus,
   RefreshCw,
   Search,
-  TriangleAlert,
   UsersRound,
-  X,
 } from 'lucide-react';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
+import { Button } from '@/components/ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
+import { FormField } from '@/components/ui/FormField';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { api } from '@/lib/api';
 
 type StaffingStatus =
@@ -74,6 +77,9 @@ const emptyRecruitmentForm: RecruitmentForm = {
   description: '',
 };
 
+const inputClass =
+  'h-11 w-full border border-[var(--border-strong)] bg-[var(--surface)] px-3 text-sm text-[var(--text)] outline-none transition focus:border-[var(--accent)]';
+
 function statusLabel(status: StaffingStatus) {
   if (status === 'FULLY_STAFFED') return 'Fully staffed';
   if (status === 'RECRUITMENT_IN_PROGRESS') return 'Recruitment in progress';
@@ -82,14 +88,14 @@ function statusLabel(status: StaffingStatus) {
 
 function statusClass(status: StaffingStatus) {
   if (status === 'FULLY_STAFFED') {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300';
   }
 
   if (status === 'RECRUITMENT_IN_PROGRESS') {
-    return 'border-blue-200 bg-blue-50 text-blue-700';
+    return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300';
   }
 
-  return 'border-amber-200 bg-amber-50 text-amber-800';
+  return 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300';
 }
 
 function errorMessage(error: unknown, fallback: string) {
@@ -109,7 +115,7 @@ export default function RecruitmentJobsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    loadPlan();
+    void loadPlan();
   }, []);
 
   async function loadPlan() {
@@ -195,72 +201,49 @@ export default function RecruitmentJobsPage() {
 
   return (
     <DashboardShell activePage="recruitment">
-      <div className="space-y-7">
-        <section className="flex flex-col gap-5 border-b border-black/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+      <div className="space-y-6">
+        <PageHeader
+          category="Workforce planning"
+          title="Positions & vacancies"
+          description="Compare approved establishment with current occupancy and recruitment already in progress. Open recruitment only against real approved vacancies."
+          primaryAction={{
+            label: loading ? 'Refreshing' : 'Refresh plan',
+            onClick: () => void loadPlan(),
+            icon: <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />,
+          }}
+          secondaryAction={{
+            label: 'Position catalogue',
+            href: '/dashboard/positions',
+            icon: <LayoutList size={16} />,
+          }}
+          tools={
             <Link
               href="/dashboard/recruitment"
-              className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-black"
+              className="text-sm font-extrabold text-[var(--accent)] hover:text-[var(--accent-hover)]"
             >
-              <ArrowLeft size={15} />
               Recruitment overview
             </Link>
-
-            <p className="mb-2 text-sm uppercase tracking-[0.25em] text-gray-400">
-              Workforce planning
-            </p>
-            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-[#111827]">
-              Positions & vacancies
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-              Compare approved establishment with current occupancy and recruitment already in progress. Open recruitment only against real approved vacancies.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/dashboard/positions"
-              className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-black hover:text-black"
-            >
-              <LayoutList size={16} />
-              Position catalogue
-            </Link>
-            <button
-              type="button"
-              onClick={loadPlan}
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-5 py-3 text-sm font-medium text-gray-600 transition hover:border-black hover:text-black disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
-          </div>
-        </section>
+          }
+        />
 
         {error ? (
-          <div className="flex items-start gap-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <TriangleAlert size={17} className="mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
+          <FeedbackBanner tone="error" title="Vacancy planning failed" message={error} />
         ) : null}
 
         {success ? (
-          <div className="flex items-start gap-3 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
-            <span>{success}</span>
-          </div>
+          <FeedbackBanner tone="success" title="Recruitment opened" message={success} />
         ) : null}
 
         {loading ? (
-          <div className="flex min-h-[520px] items-center justify-center border border-black/10 bg-white">
-            <div className="flex items-center gap-3 text-sm text-gray-500">
-              <Loader2 className="animate-spin" size={18} />
+          <div className="flex min-h-[520px] items-center justify-center border border-[var(--border)] bg-[var(--surface)]">
+            <div className="flex items-center gap-3 text-sm font-medium text-[var(--muted)]">
+              <Loader2 className="animate-spin text-[var(--accent)]" size={18} />
               Loading workforce plan...
             </div>
           </div>
         ) : (
           <>
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <section className="grid gap-0 border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xs)] sm:grid-cols-2 xl:grid-cols-5">
               <Metric label="Approved" value={plan?.totals.approvedHeadcount ?? 0} helper="Establishment seats" />
               <Metric label="Filled" value={plan?.totals.currentHeadcount ?? 0} helper="Current assignments" />
               <Metric label="Vacancies" value={plan?.totals.vacancies ?? 0} helper="Approved gaps" />
@@ -273,63 +256,90 @@ export default function RecruitmentJobsPage() {
               />
             </section>
 
-            <section className="border border-black/10 bg-white">
-              <div className="grid gap-4 border-b border-black/10 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <section className="border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xs)]">
+              <div className="grid gap-4 border-b border-[var(--border)] bg-[var(--surface-soft)] p-5 lg:grid-cols-[1fr_auto] lg:items-center sm:p-6">
+                <label className="flex min-h-11 items-center gap-2 border border-[var(--border-strong)] bg-[var(--surface)] px-3 focus-within:border-[var(--accent)]">
+                  <Search className="shrink-0 text-[var(--muted)]" size={16} />
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search position, code or department..."
-                    className="h-11 w-full border border-black/10 bg-[#f8fafc] pl-10 pr-3 text-sm outline-none transition focus:border-black"
+                    placeholder="Search position, code or department"
+                    className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
                   />
-                </div>
+                </label>
 
                 <div className="flex flex-wrap gap-2">
-                  {(['ALL', 'VACANCY_UNPLANNED', 'RECRUITMENT_IN_PROGRESS', 'FULLY_STAFFED'] as const).map(
-                    (status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => setStatusFilter(status)}
-                        className={`border px-3 py-2 text-xs font-medium transition ${
-                          statusFilter === status
-                            ? 'border-black bg-black text-white'
-                            : 'border-black/10 bg-white text-gray-600 hover:border-black'
-                        }`}
-                      >
-                        {status === 'ALL' ? 'All' : statusLabel(status)}
-                      </button>
-                    ),
-                  )}
+                  {(
+                    [
+                      'ALL',
+                      'VACANCY_UNPLANNED',
+                      'RECRUITMENT_IN_PROGRESS',
+                      'FULLY_STAFFED',
+                    ] as const
+                  ).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setStatusFilter(status)}
+                      className={`min-h-10 border px-3 text-xs font-extrabold transition ${
+                        statusFilter === status
+                          ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-text)]'
+                          : 'border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                      }`}
+                    >
+                      {status === 'ALL' ? 'All' : statusLabel(status)}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               {!positions.length ? (
-                <div className="px-6 py-16 text-center">
-                  <BriefcaseBusiness size={34} className="mx-auto text-gray-300" />
-                  <p className="mt-4 text-sm font-medium text-[#111827]">No positions match this view</p>
-                  <p className="mt-1 text-sm text-gray-500">Adjust the search or staffing filter.</p>
+                <div className="p-5 sm:p-6">
+                  <EmptyState
+                    icon={<BriefcaseBusiness size={22} />}
+                    title="No positions match this view"
+                    description="Adjust the search or staffing filter to return to the approved establishment list."
+                    action={
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setQuery('');
+                          setStatusFilter('ALL');
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    }
+                  />
                 </div>
               ) : (
-                <div className="divide-y divide-black/10">
+                <div className="divide-y divide-[var(--border)]">
                   {positions.map((position) => (
-                    <article key={position.id} className="p-5 transition hover:bg-[#fbfcfd]">
-                      <div className="grid gap-5 xl:grid-cols-[1.2fr_repeat(4,110px)_180px] xl:items-center">
+                    <article
+                      key={position.id}
+                      className="px-5 py-5 transition hover:bg-[var(--surface-soft)] sm:px-6"
+                    >
+                      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_repeat(4,100px)_190px] xl:items-center">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className={`border px-2 py-1 text-[11px] font-medium ${statusClass(position.staffingStatus)}`}>
+                            <span
+                              className={`border px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${statusClass(position.staffingStatus)}`}
+                            >
                               {statusLabel(position.staffingStatus)}
                             </span>
-                            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
+                            <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
                               {position.code}
                             </span>
                           </div>
-                          <h2 className="mt-2 text-base font-semibold text-[#111827]">{position.title}</h2>
-                          <p className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+                          <h2 className="mt-2 text-base font-black text-[var(--text)]">
+                            {position.title}
+                          </h2>
+                          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-medium text-[var(--muted)]">
                             <Building2 size={14} />
                             {position.department?.name ?? 'No department assigned'}
-                            {position.employmentCategory ? ` · ${position.employmentCategory.replaceAll('_', ' ')}` : ''}
+                            {position.employmentCategory
+                              ? ` · ${position.employmentCategory.replaceAll('_', ' ')}`
+                              : ''}
                           </p>
                         </div>
 
@@ -340,21 +350,21 @@ export default function RecruitmentJobsPage() {
 
                         <div className="xl:text-right">
                           {position.unplannedVacancies > 0 ? (
-                            <button
-                              type="button"
+                            <Button
+                              variant="primary"
+                              icon={<Plus size={15} />}
                               onClick={() => openRecruitment(position)}
-                              className="inline-flex w-full items-center justify-center gap-2 border border-black bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white hover:text-black xl:w-auto"
+                              className="w-full xl:w-auto"
                             >
-                              <Plus size={15} />
                               Open recruitment
-                            </button>
+                            </Button>
                           ) : position.staffingStatus === 'RECRUITMENT_IN_PROGRESS' ? (
-                            <span className="inline-flex items-center gap-2 text-sm font-medium text-blue-700">
+                            <span className="inline-flex items-center gap-2 text-sm font-bold text-blue-700 dark:text-blue-300">
                               <UsersRound size={16} />
                               Covered by recruitment
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700">
+                            <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-300">
                               <CheckCircle2 size={16} />
                               No action needed
                             </span>
@@ -370,90 +380,163 @@ export default function RecruitmentJobsPage() {
         )}
       </div>
 
-      {selectedPosition ? (
-        <div className="fixed inset-0 z-[80] flex justify-end bg-black/35" role="presentation" onMouseDown={closeRecruitment}>
-          <aside
-            className="h-full w-full max-w-xl overflow-y-auto bg-white shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="open-recruitment-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-black/10 bg-white px-6 py-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Approved vacancy</p>
-                <h2 id="open-recruitment-title" className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[#111827]">
-                  Open recruitment
-                </h2>
+      <Drawer
+        open={Boolean(selectedPosition)}
+        title="Open recruitment"
+        description="Create a recruitment job against an approved position vacancy."
+        onClose={closeRecruitment}
+        footer={
+          selectedPosition ? (
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="secondary" disabled={submitting} onClick={closeRecruitment}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="open-recruitment-form"
+                variant="primary"
+                loading={submitting}
+                icon={<BriefcaseBusiness size={16} />}
+              >
+                Create recruitment job
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {selectedPosition ? (
+          <form id="open-recruitment-form" onSubmit={submitRecruitment} className="space-y-5">
+            <div className="border border-[var(--border-strong)] bg-[var(--surface-soft)] p-4">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                Approved vacancy
+              </p>
+              <p className="mt-2 font-black text-[var(--text)]">{selectedPosition.title}</p>
+              <p className="mt-1 text-sm font-medium text-[var(--muted)]">
+                {selectedPosition.code} · {selectedPosition.department?.name ?? 'No department'}
+              </p>
+              <div className="mt-4 grid grid-cols-3 gap-3 border-t border-[var(--border)] pt-4">
+                <Count label="Vacant" value={selectedPosition.vacancies} />
+                <Count label="Recruiting" value={selectedPosition.recruitingOpenings} />
+                <Count label="Available" value={selectedPosition.unplannedVacancies} />
               </div>
-              <button type="button" onClick={closeRecruitment} className="flex h-9 w-9 items-center justify-center border border-black/10 text-gray-500 hover:border-black hover:text-black">
-                <X size={17} />
-              </button>
             </div>
 
-            <form onSubmit={submitRecruitment} className="space-y-6 p-6">
-              <div className="border border-black/10 bg-[#f8fafc] p-4">
-                <p className="text-sm font-semibold text-[#111827]">{selectedPosition.title}</p>
-                <p className="mt-1 text-sm text-gray-500">{selectedPosition.code} · {selectedPosition.department?.name ?? 'No department'}</p>
-                <div className="mt-4 grid grid-cols-3 gap-3">
-                  <Count label="Vacant" value={selectedPosition.vacancies} />
-                  <Count label="Recruiting" value={selectedPosition.recruitingOpenings} />
-                  <Count label="Available" value={selectedPosition.unplannedVacancies} />
-                </div>
-              </div>
+            <FormField label="Reference" htmlFor="recruitment-reference">
+              <input
+                id="recruitment-reference"
+                value={form.reference}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, reference: event.target.value }))
+                }
+                maxLength={80}
+                placeholder="e.g. VAC-SRN-2026-01"
+                className={inputClass}
+              />
+            </FormField>
 
-              <Field label="Reference">
-                <input value={form.reference} onChange={(event) => setForm((current) => ({ ...current, reference: event.target.value }))} maxLength={80} placeholder="e.g. VAC-SRN-2026-01" className="field-input" />
-              </Field>
+            <FormField label="Planned openings" htmlFor="recruitment-openings" required>
+              <input
+                id="recruitment-openings"
+                type="number"
+                min={1}
+                max={selectedPosition.unplannedVacancies}
+                value={form.plannedOpenings}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, plannedOpenings: event.target.value }))
+                }
+                className={inputClass}
+                required
+              />
+            </FormField>
 
-              <Field label="Planned openings" required>
-                <input type="number" min={1} max={selectedPosition.unplannedVacancies} value={form.plannedOpenings} onChange={(event) => setForm((current) => ({ ...current, plannedOpenings: event.target.value }))} className="field-input" required />
-              </Field>
+            <FormField label="Location" htmlFor="recruitment-location">
+              <input
+                id="recruitment-location"
+                value={form.location}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, location: event.target.value }))
+                }
+                maxLength={160}
+                placeholder="e.g. Johannesburg Practice"
+                className={inputClass}
+              />
+            </FormField>
 
-              <Field label="Location">
-                <input value={form.location} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} maxLength={160} placeholder="e.g. Johannesburg Practice" className="field-input" />
-              </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Opening date" htmlFor="recruitment-opening-date">
+                <input
+                  id="recruitment-opening-date"
+                  type="date"
+                  value={form.openingDate}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, openingDate: event.target.value }))
+                  }
+                  className={inputClass}
+                />
+              </FormField>
+              <FormField label="Closing date" htmlFor="recruitment-closing-date">
+                <input
+                  id="recruitment-closing-date"
+                  type="date"
+                  value={form.closingDate}
+                  min={form.openingDate || undefined}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, closingDate: event.target.value }))
+                  }
+                  className={inputClass}
+                />
+              </FormField>
+            </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Opening date">
-                  <input type="date" value={form.openingDate} onChange={(event) => setForm((current) => ({ ...current, openingDate: event.target.value }))} className="field-input" />
-                </Field>
-                <Field label="Closing date">
-                  <input type="date" value={form.closingDate} min={form.openingDate || undefined} onChange={(event) => setForm((current) => ({ ...current, closingDate: event.target.value }))} className="field-input" />
-                </Field>
-              </div>
+            <FormField label="Description" htmlFor="recruitment-description">
+              <textarea
+                id="recruitment-description"
+                value={form.description}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, description: event.target.value }))
+                }
+                maxLength={2000}
+                rows={6}
+                className={`${inputClass} h-auto min-h-32 resize-y py-3`}
+              />
+            </FormField>
 
-              <Field label="Description">
-                <textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} maxLength={2000} rows={6} className="field-input resize-y" />
-              </Field>
-
-              <div className="border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-800">
-                This recruitment job will remain linked to the approved position. MedCNX will prevent planned openings from exceeding the remaining establishment vacancy.
-              </div>
-
-              <div className="flex flex-col-reverse gap-3 border-t border-black/10 pt-5 sm:flex-row sm:justify-end">
-                <button type="button" onClick={closeRecruitment} disabled={submitting} className="border border-black/10 bg-white px-5 py-3 text-sm font-medium text-gray-600 hover:border-black disabled:opacity-50">
-                  Cancel
-                </button>
-                <button type="submit" disabled={submitting} className="inline-flex items-center justify-center gap-2 border border-black bg-black px-5 py-3 text-sm font-medium text-white hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-60">
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : <BriefcaseBusiness size={16} />}
-                  Create recruitment job
-                </button>
-              </div>
-            </form>
-          </aside>
-        </div>
-      ) : null}
+            <FeedbackBanner
+              tone="info"
+              title="Position-linked recruitment"
+              message="This recruitment job remains linked to the approved position. MedCNX prevents planned openings from exceeding the remaining establishment vacancy."
+            />
+          </form>
+        ) : null}
+      </Drawer>
     </DashboardShell>
   );
 }
 
-function Metric({ label, value, helper, emphasis }: { label: string; value: number; helper: string; emphasis?: boolean }) {
+function Metric({
+  label,
+  value,
+  helper,
+  emphasis,
+}: {
+  label: string;
+  value: number;
+  helper: string;
+  emphasis?: boolean;
+}) {
   return (
-    <div className={`border p-5 ${emphasis ? 'border-amber-200 bg-amber-50' : 'border-black/10 bg-white'}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#111827]">{value}</p>
-      <p className="mt-1 text-xs text-gray-500">{helper}</p>
+    <div
+      className={`border-b border-[var(--border)] p-4 last:border-b-0 sm:border-r sm:last:border-r-0 xl:border-b-0 ${
+        emphasis ? 'bg-amber-50 dark:bg-amber-950' : 'bg-[var(--surface)]'
+      }`}
+    >
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black tracking-[-0.04em] text-[var(--text)]">
+        {value}
+      </p>
+      <p className="mt-1 text-xs font-medium text-[var(--muted)]">{helper}</p>
     </div>
   );
 }
@@ -461,19 +544,10 @@ function Metric({ label, value, helper, emphasis }: { label: string; value: numb
 function Count({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-[#111827]">{value}</p>
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-black text-[var(--text)]">{value}</p>
     </div>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-medium text-[#111827]">
-        {label}{required ? ' *' : ''}
-      </span>
-      {children}
-    </label>
   );
 }
