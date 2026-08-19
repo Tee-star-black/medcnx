@@ -602,6 +602,7 @@ export class PositionsService {
         departmentId: true,
         jobTitle: true,
         employmentStatus: true,
+        startDate: true,
       },
     });
 
@@ -617,19 +618,24 @@ export class PositionsService {
 
     const position = await this.getPosition(user, dto.positionId);
     if (!position.active) throw new BadRequestException('Position is archived.');
-    if (
-      position.departmentId &&
-      position.departmentId !== employee.departmentId
-    ) {
-      throw new BadRequestException(
-        'Employee must be transferred to the position department before assignment.',
-      );
-    }
 
     const effectiveDate = new Date(dto.effectiveDate);
     if (Number.isNaN(effectiveDate.getTime())) {
       throw new BadRequestException(
         'A valid position effective date is required.',
+      );
+    }
+
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    if (effectiveDate > endOfToday) {
+      throw new BadRequestException(
+        'Position effective date cannot be in the future until scheduled position changes are supported.',
+      );
+    }
+    if (employee.startDate && effectiveDate < employee.startDate) {
+      throw new BadRequestException(
+        'Position effective date cannot precede the employee start date.',
       );
     }
 
@@ -658,6 +664,7 @@ export class PositionsService {
           },
         })
       : null;
+    const nextDepartmentId = position.departmentId ?? employee.departmentId;
 
     const assignment = await this.prisma.$transaction(async (transaction) => {
       if (current) {
@@ -680,7 +687,12 @@ export class PositionsService {
 
       await transaction.employee.update({
         where: { id: employeeId },
-        data: { jobTitle: position.title },
+        data: {
+          jobTitle: position.title,
+          ...(nextDepartmentId !== employee.departmentId
+            ? { departmentId: nextDepartmentId }
+            : {}),
+        },
       });
 
       await transaction.auditLog.create({
@@ -703,7 +715,8 @@ export class PositionsService {
             nextPositionId: position.id,
             nextPositionCode: position.code,
             nextPositionTitle: position.title,
-            departmentId: employee.departmentId,
+            previousDepartmentId: employee.departmentId,
+            departmentId: nextDepartmentId,
           },
         },
       });
@@ -711,7 +724,11 @@ export class PositionsService {
       return created;
     });
 
-    return { assignment, position };
+    return {
+      assignment,
+      position,
+      employeeDepartmentId: nextDepartmentId,
+    };
   }
 
   async employeeHistory(user: CurrentUser, employeeId: string) {
