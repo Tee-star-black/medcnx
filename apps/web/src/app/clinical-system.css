@@ -224,6 +224,171 @@
   border-radius: 0 !important;
 }
 
+/*
+ * Legacy token bridge
+ *
+ * Older modules still carry hard-coded Tailwind neutral utilities. Because the
+ * dashboard shell wraps every route in workspace-content, the clinical layer
+ * can translate those legacy neutrals into the current design tokens without
+ * touching business logic in each individual module.
+ */
+.workspace-content [class*="bg-white"],
+.employee-content [class*="bg-white"] {
+  background-color: var(--surface) !important;
+}
+
+.workspace-content [class*="bg-[#f8fafc]"],
+.workspace-content [class*="bg-[#fbfcfd]"],
+.workspace-content [class*="bg-gray-50"],
+.employee-content [class*="bg-[#f8fafc]"],
+.employee-content [class*="bg-[#fbfcfd]"],
+.employee-content [class*="bg-gray-50"] {
+  background-color: var(--surface-soft) !important;
+}
+
+.workspace-content [class*="bg-[#111827]"],
+.employee-content [class*="bg-[#111827]"] {
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+.workspace-content [class*="border-black/5"],
+.workspace-content [class*="border-black/10"],
+.workspace-content [class*="border-black/15"],
+.employee-content [class*="border-black/5"],
+.employee-content [class*="border-black/10"],
+.employee-content [class*="border-black/15"] {
+  border-color: var(--border) !important;
+}
+
+.workspace-content [class*="text-[#111827]"],
+.workspace-content [class*="text-gray-700"],
+.employee-content [class*="text-[#111827]"],
+.employee-content [class*="text-gray-700"] {
+  color: var(--text) !important;
+}
+
+.workspace-content [class*="text-gray-600"],
+.workspace-content [class*="text-gray-500"],
+.employee-content [class*="text-gray-600"],
+.employee-content [class*="text-gray-500"] {
+  color: var(--text-soft) !important;
+}
+
+.workspace-content [class*="text-gray-400"],
+.workspace-content [class*="text-gray-300"],
+.employee-content [class*="text-gray-400"],
+.employee-content [class*="text-gray-300"] {
+  color: var(--muted) !important;
+}
+
+/* Stronger visual hierarchy for the remaining operational modules. */
+.workspace-content > div[class*="space-y"] > section:first-child[class*="border-b"],
+.workspace-content > section:first-child[class*="border-b"] {
+  border: 1px solid var(--border-strong) !important;
+  background: var(--surface) !important;
+  padding: 1.5rem !important;
+  position: relative;
+}
+
+.workspace-content > div[class*="space-y"] > section:first-child[class*="border-b"]::before,
+.workspace-content > section:first-child[class*="border-b"]::before {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 3.25rem;
+  height: var(--clinical-edge);
+  content: "";
+  background: var(--accent);
+}
+
+.workspace-content > div[class*="space-y"] > section:first-child[class*="border-b"] h1,
+.workspace-content > section:first-child[class*="border-b"] h1 {
+  font-size: clamp(1.9rem, 3vw, 2.6rem) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.055em !important;
+}
+
+.workspace-content > div[class*="space-y"] > section:first-child[class*="border-b"] p[class*="uppercase"],
+.workspace-content > section:first-child[class*="border-b"] p[class*="uppercase"] {
+  color: var(--accent) !important;
+  font-size: 0.7rem !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.2em !important;
+}
+
+/* Metric grids should read as one establishment strip instead of loose cards. */
+.workspace-content section[class*="grid"] > div[class*="border"][class*="p-5"],
+.workspace-content section[class*="grid"] > article[class*="border"][class*="p-5"] {
+  min-height: 8.25rem;
+  border-color: var(--border-strong) !important;
+  background: var(--surface) !important;
+  box-shadow: 3px 3px 0 rgba(8, 41, 56, 0.035) !important;
+}
+
+.workspace-content section[class*="grid"] > div[class*="border"][class*="p-5"] p[class*="text-2xl"],
+.workspace-content section[class*="grid"] > article[class*="border"][class*="p-5"] p[class*="text-2xl"] {
+  font-variant-numeric: tabular-nums;
+  font-weight: 900 !important;
+  letter-spacing: -0.05em !important;
+}
+
+/* Operational lists get row rhythm and clearer hover/focus feedback. */
+.workspace-content div[class*="divide-y"] > article,
+.workspace-content div[class*="divide-y"] > a,
+.workspace-content tbody tr {
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.workspace-content div[class*="divide-y"] > article:hover,
+.workspace-content div[class*="divide-y"] > a:hover {
+  background-color: var(--surface-soft) !important;
+}
+
+.workspace-content a[class*="border"]:focus-visible,
+.workspace-content button:focus-visible {
+  outline: 2px solid var(--accent-ring) !important;
+  outline-offset: 2px;
+}
+
+/* Legacy drawers are upgraded into the same work-panel language as the shared Drawer. */
+.workspace-content [role="dialog"],
+.app-shell [role="dialog"] {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+.workspace-content [role="dialog"] > div[class*="border-b"],
+.workspace-content [role="dialog"] header[class*="border-b"] {
+  border-color: var(--border-strong) !important;
+  background-color: var(--surface) !important;
+}
+
+.workspace-content [role="dialog"] textarea,
+.workspace-content [role="dialog"] input,
+.workspace-content [role="dialog"] select {
+  background-color: var(--surface) !important;
+}
+
+/* Dense records in payroll, audit, leave and attendance stay readable on wide screens. */
+.workspace-content table td,
+.workspace-content table th {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.workspace-content [class*="overflow-x-auto"] {
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.workspace-content [class*="overflow-x-auto"]::-webkit-scrollbar {
+  height: 9px;
+}
+
+.workspace-content [class*="overflow-x-auto"]::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+}
+
 /* Responsive density. */
 @media (max-width: 767px) {
   :root {
@@ -234,5 +399,16 @@
   .workspace-content,
   .employee-content {
     padding-bottom: 2rem;
+  }
+
+  .workspace-content > div[class*="space-y"] > section:first-child[class*="border-b"],
+  .workspace-content > section:first-child[class*="border-b"] {
+    padding: 1.125rem !important;
+  }
+
+  .workspace-content table td,
+  .workspace-content table th {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
   }
 }
