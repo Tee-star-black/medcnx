@@ -9,6 +9,7 @@ import {
   AttendanceStatus,
   AuditAction,
   EmployeeNotificationCategory,
+  EmploymentStatus,
   LeaveStatus,
   type AttendanceCorrectionReason,
 } from '@prisma/client';
@@ -734,10 +735,11 @@ export class AttendanceService {
       await this.markMissedClockOuts(user, startOfDay);
     }
 
+    const employmentOverlap = this.employmentOverlapWhere(startOfDay, endOfDay);
     const [employees, records, leave, pendingCorrections] = await Promise.all([
       this.prisma.employee.findMany({
         where: {
-          AND: [employeeScope, { employmentStatus: 'ACTIVE' }],
+          AND: [employeeScope, employmentOverlap],
         },
         include: { department: true },
       }),
@@ -837,10 +839,11 @@ export class AttendanceService {
     const records = await this.findAll(user, { dateFrom, dateTo });
     const policy = await this.getAttendancePolicy(user.organisationId);
     const employeeScope = await this.accessScope.employeeWhere(user);
+    const employmentOverlap = this.employmentOverlapWhere(from, to);
     const [employees, leaveRequests] = await Promise.all([
       this.prisma.employee.findMany({
         where: {
-          AND: [employeeScope, { employmentStatus: 'ACTIVE' }],
+          AND: [employeeScope, employmentOverlap],
         },
         include: { department: true },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
@@ -857,27 +860,42 @@ export class AttendanceService {
       }),
     ]);
 
-    const expectedDays = this.countWorkingDays(
-      from,
-      to,
-      policy.attendanceWorkingDays,
-    );
     const summaries = employees.map((employee) => {
+      const employmentStart =
+        employee.startDate && employee.startDate > from
+          ? employee.startDate
+          : from;
+      const employmentEnd =
+        employee.endDate && employee.endDate < to ? employee.endDate : to;
+      const expectedDays =
+        employmentStart <= employmentEnd
+          ? this.countWorkingDays(
+              employmentStart,
+              employmentEnd,
+              policy.attendanceWorkingDays,
+            )
+          : 0;
       const employeeRecords = records.filter(
         (record: any) => record.employeeId === employee.id,
       ) as Array<any>;
       const leaveDays = leaveRequests
         .filter((leave) => leave.employeeId === employee.id)
-        .reduce(
-          (total, leave) =>
+        .reduce((total, leave) => {
+          const leaveStart =
+            leave.startDate > employmentStart ? leave.startDate : employmentStart;
+          const leaveEnd =
+            leave.endDate < employmentEnd ? leave.endDate : employmentEnd;
+          return (
             total +
-            this.countWorkingDays(
-              leave.startDate > from ? leave.startDate : from,
-              leave.endDate < to ? leave.endDate : to,
-              policy.attendanceWorkingDays,
-            ),
-          0,
-        );
+            (leaveStart <= leaveEnd
+              ? this.countWorkingDays(
+                  leaveStart,
+                  leaveEnd,
+                  policy.attendanceWorkingDays,
+                )
+              : 0)
+          );
+        }, 0);
       const presentDays = new Set(
         employeeRecords.map((record) =>
           new Date(record.clockInAt).toISOString().slice(0, 10),
@@ -948,6 +966,41 @@ export class AttendanceService {
     return {
       fileName: `medcnx-attendance-report-${dateFrom}-${dateTo}.csv`,
       content: `\uFEFF${csv}\r\n`,
+    };
+  }
+
+  private employmentOverlapWhere(from: Date, to: Date) {
+    return {
+      AND: [
+        {
+          OR: [
+            {
+              employmentStatus: {
+                in: [
+                  EmploymentStatus.ACTIVE,
+                  EmploymentStatus.ON_LEAVE,
+                  EmploymentStatus.SUSPENDED,
+                ],
+              },
+            },
+            {
+              employmentStatus: {
+                in: [
+                  EmploymentStatus.TERMINATED,
+                  EmploymentStatus.RESIGNED,
+                ],
+              },
+              endDate: { not: null },
+            },
+          ],
+        },
+        {
+          OR: [{ startDate: null }, { startDate: { lte: to } }],
+        },
+        {
+          OR: [{ endDate: null }, { endDate: { gte: from } }],
+        },
+      ],
     };
   }
 
