@@ -18,6 +18,8 @@ type Position = {
   title: string;
   departmentId?: string | null;
   active: boolean;
+  approvedHeadcount: number;
+  currentHeadcount: number;
   department?: { id: string; name: string } | null;
 };
 
@@ -85,6 +87,10 @@ function readError(error: unknown, fallback: string) {
   return Array.isArray(message) ? message.join(' ') : message || fallback;
 }
 
+function remainingCapacity(position: Position) {
+  return Math.max(position.approvedHeadcount - position.currentHeadcount, 0);
+}
+
 export function EmployeeEmploymentChanges({
   employee,
   onChanged,
@@ -108,7 +114,7 @@ export function EmployeeEmploymentChanges({
   const eligiblePositions = useMemo(() => {
     const currentDepartmentId = employee.department?.id ?? null;
     return positions.filter((position) => {
-      if (!position.active) return false;
+      if (!position.active || remainingCapacity(position) <= 0) return false;
       if (action === 'PROMOTE') {
         return (
           (position.departmentId ?? null) === currentDepartmentId &&
@@ -116,7 +122,10 @@ export function EmployeeEmploymentChanges({
         );
       }
       if (action === 'TRANSFER') {
-        return Boolean(position.departmentId) && position.departmentId !== currentDepartmentId;
+        return (
+          Boolean(position.departmentId) &&
+          position.departmentId !== currentDepartmentId
+        );
       }
       return false;
     });
@@ -143,6 +152,9 @@ export function EmployeeEmploymentChanges({
     if (action === 'PROMOTE' || action === 'TRANSFER') {
       if (!positionId) return 'Select the destination position.';
       if (!selectedPosition) return 'Select a valid destination position.';
+      if (remainingCapacity(selectedPosition) <= 0) {
+        return 'The selected position has no approved headcount capacity remaining.';
+      }
     }
 
     if (action === 'EMPLOYMENT_TYPE') {
@@ -173,7 +185,9 @@ export function EmployeeEmploymentChanges({
       const response = await api.get<Position[]>('/positions');
       setPositions(response.data);
     } catch (error: unknown) {
-      onError(readError(error, 'Could not load positions for this employment change.'));
+      onError(
+        readError(error, 'Could not load positions for this employment change.'),
+      );
     } finally {
       setPositionsLoading(false);
     }
@@ -218,6 +232,7 @@ export function EmployeeEmploymentChanges({
           reason: reason.trim(),
         });
         setAction(null);
+        setPositions([]);
         await onChanged(
           action === 'TRANSFER'
             ? `Employee transferred to ${selectedPosition?.title ?? 'the selected position'} successfully.`
@@ -239,6 +254,10 @@ export function EmployeeEmploymentChanges({
       }
     } catch (error: unknown) {
       onError(readError(error, `Could not ${config.title.toLowerCase()}.`));
+      if (action === 'PROMOTE' || action === 'TRANSFER') {
+        setPositions([]);
+        setPositionId('');
+      }
     } finally {
       setBusy(false);
     }
@@ -336,13 +355,16 @@ export function EmployeeEmploymentChanges({
                         {position.code} · {position.title}
                         {position.department?.name
                           ? ` · ${position.department.name}`
-                          : ''}
+                          : ''}{' '}
+                        · {remainingCapacity(position)} of{' '}
+                        {position.approvedHeadcount} slot
+                        {position.approvedHeadcount === 1 ? '' : 's'} available
                       </option>
                     ))}
                   </select>
                   {!positionsLoading && eligiblePositions.length === 0 ? (
                     <p className="mt-2 text-xs leading-5 text-amber-700">
-                      No eligible active destination positions are currently available for this change.
+                      No eligible destination positions with approved headcount capacity are currently available for this change.
                     </p>
                   ) : null}
                 </div>
@@ -408,7 +430,7 @@ export function EmployeeEmploymentChanges({
               {selectedPosition &&
               (action === 'PROMOTE' || action === 'TRANSFER') ? (
                 <div className="border border-black/10 bg-[#f8fafc] px-4 py-3 text-sm leading-6 text-gray-600">
-                  This will close the current position assignment, open the selected assignment, update the employee job title, and align the department to the destination position when required.
+                  This will close the current position assignment, open the selected assignment, update the employee job title, and align the department to the destination position when required. The backend rechecks approved headcount capacity transactionally before committing the move.
                 </div>
               ) : null}
 
