@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   AuditAction,
+  EmploymentStatus,
   JobApplicationStatus,
   Prisma,
   RecruitmentJobStatus,
@@ -16,6 +17,10 @@ import { PrismaService } from '../database/prisma.service';
 import { HireApplicationDto } from './dto/hire-application.dto';
 
 const SERIALIZABLE_RETRY_LIMIT = 3;
+
+function utcDateOnlyValue(date: Date) {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
 
 @Injectable()
 export class RecruitmentHiringService {
@@ -34,6 +39,11 @@ export class RecruitmentHiringService {
     }
     if (Number.isNaN(startDate.getTime())) {
       throw new BadRequestException('A valid employee start date is required.');
+    }
+    if (utcDateOnlyValue(startDate) > utcDateOnlyValue(new Date())) {
+      throw new BadRequestException(
+        'Employee start date cannot be in the future until scheduled onboarding is supported.',
+      );
     }
 
     const reason = dto.reason?.trim() || 'Hired from recruitment workflow.';
@@ -140,6 +150,7 @@ export class RecruitmentHiringService {
                 jobTitle: position?.title ?? application.job.title,
                 employmentType:
                   dto.employmentType?.trim() || application.job.employmentType,
+                employmentStatus: EmploymentStatus.ACTIVE,
                 startDate,
               },
             });
@@ -195,6 +206,7 @@ export class RecruitmentHiringService {
                   positionId: position?.id ?? null,
                   positionCode: position?.code ?? null,
                   employeeNumber: employee.employeeNumber,
+                  employmentStatus: EmploymentStatus.ACTIVE,
                   effectiveDate: startDate.toISOString(),
                 },
               },
