@@ -10,36 +10,21 @@ type FormFieldProps = {
   children: ReactNode;
 };
 
-export function FormField({
-  label,
-  htmlFor,
-  required,
-  optional,
-  hint,
-  error,
-  children,
-}: FormFieldProps) {
+export function FormField({ label, htmlFor, required, optional, hint, error, children }: FormFieldProps) {
   return (
-    <div>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <label
-          htmlFor={htmlFor}
-          className="text-sm font-extrabold text-[var(--text-soft)]"
-        >
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <label htmlFor={htmlFor} className="text-xs font-extrabold uppercase tracking-[0.08em] text-[var(--text-soft)]">
           {label}
           {required ? <span className="ml-1 text-red-700">*</span> : null}
         </label>
-        {optional ? (
-          <span className="text-xs font-semibold text-[var(--muted)]">
-            Optional
-          </span>
-        ) : null}
+        {optional ? <span className="text-xs font-semibold text-[var(--muted)]">Optional</span> : null}
       </div>
       {children}
       {error ? (
-        <p className="mt-2 text-sm font-bold text-red-700">{error}</p>
+        <p className="border-l-2 border-red-600 pl-2 text-sm font-bold text-red-700">{error}</p>
       ) : hint ? (
-        <p className="mt-2 text-sm font-medium text-[var(--muted)]">{hint}</p>
+        <p className="text-xs font-medium leading-5 text-[var(--muted)]">{hint}</p>
       ) : null}
     </div>
   );
