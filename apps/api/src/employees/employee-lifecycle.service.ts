@@ -106,6 +106,11 @@ export class EmployeeLifecycleService {
     dto: EmployeePromotionDto,
   ) {
     const employee = await this.getMutableEmployee(user, employeeId);
+    await this.assertNoActivePositionAssignment(
+      user,
+      employeeId,
+      'Promotion',
+    );
     const nextJobTitle = dto.jobTitle.trim();
 
     if (employee.jobTitle === nextJobTitle) {
@@ -128,6 +133,11 @@ export class EmployeeLifecycleService {
     dto: EmployeeTransferDto,
   ) {
     const employee = await this.getMutableEmployee(user, employeeId);
+    await this.assertNoActivePositionAssignment(
+      user,
+      employeeId,
+      'Department transfer',
+    );
     const department = await this.prisma.department.findFirst({
       where: { id: dto.departmentId, organisationId: user.organisationId },
       select: { id: true, name: true },
@@ -644,6 +654,28 @@ export class EmployeeLifecycleService {
       );
     }
     return employee;
+  }
+
+  private async assertNoActivePositionAssignment(
+    user: CurrentUser,
+    employeeId: string,
+    changeLabel: string,
+  ) {
+    const activeAssignment =
+      await this.prisma.employeePositionAssignment.findFirst({
+        where: {
+          organisationId: user.organisationId,
+          employeeId,
+          effectiveTo: null,
+        },
+        select: { id: true, positionId: true },
+      });
+
+    if (activeAssignment) {
+      throw new BadRequestException(
+        `${changeLabel} must use the position assignment workflow while the employee has an active position assignment.`,
+      );
+    }
   }
 
   private async assertNoManagerCycle(
