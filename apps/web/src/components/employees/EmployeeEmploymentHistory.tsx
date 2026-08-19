@@ -6,11 +6,13 @@ import {
   BriefcaseBusiness,
   Building2,
   CalendarDays,
+  History,
   Loader2,
   RefreshCw,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
+import { Button, EmptyState, FeedbackBanner } from '@/components/ui';
 import { api } from '@/lib/api';
 
 type EmploymentHistoryEvent = {
@@ -85,12 +87,15 @@ function eventLabel(eventType: string) {
     REACTIVATED: 'Reactivated',
     RESIGNED: 'Resignation',
     TERMINATED: 'Termination',
+    POSITION_CHANGED: 'Position changed',
   };
   return labels[eventType] ?? label(eventType);
 }
 
 function eventIcon(eventType: string) {
-  if (eventType === 'PROMOTED') return <BriefcaseBusiness size={16} />;
+  if (eventType === 'PROMOTED' || eventType === 'POSITION_CHANGED') {
+    return <BriefcaseBusiness size={16} />;
+  }
   if (eventType === 'TRANSFERRED') return <Building2 size={16} />;
   if (eventType === 'MANAGER_CHANGED') return <UserRound size={16} />;
   if (eventType === 'HIRED') return <ShieldCheck size={16} />;
@@ -158,92 +163,115 @@ export function EmployeeEmploymentHistory({ employeeId, refreshKey }: Props) {
   );
 
   return (
-    <section className="border border-black/10 bg-white">
-      <div className="flex flex-col gap-4 border-b border-black/10 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-[-0.03em] text-[#111827]">
-            Employment history
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Audited lifecycle events with effective and recorded dates.
-          </p>
+    <section className="med-card overflow-hidden">
+      <div className="flex flex-col gap-4 border-b border-[var(--border)] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-[var(--border-strong)] bg-[var(--surface-soft)] text-[var(--accent)]">
+            <History size={18} />
+          </div>
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+              Audit trail
+            </p>
+            <h2 className="mt-1 text-lg font-black tracking-[-0.03em] text-[var(--text)]">
+              Employment history
+            </h2>
+            <p className="mt-1 text-sm font-medium text-[var(--muted)]">
+              Effective-dated employment events with their recorded audit time.
+            </p>
+          </div>
         </div>
-        <button
+
+        <Button
           type="button"
+          variant="secondary"
+          icon={<RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />}
           onClick={() => void loadHistory(true)}
           disabled={loading || refreshing}
-          className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-4 py-2 text-sm text-gray-600 transition hover:border-black hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
           Refresh history
-        </button>
+        </Button>
       </div>
 
       {loading ? (
-        <div className="flex min-h-48 items-center justify-center gap-3 p-6 text-sm text-gray-500">
+        <div className="flex min-h-48 items-center justify-center gap-3 px-6 py-12 text-sm font-semibold text-[var(--muted)]">
           <Loader2 size={18} className="animate-spin" />
           Loading employment history...
         </div>
       ) : error ? (
         <div className="p-6">
-          <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <FeedbackBanner
+            tone="error"
+            title="Employment history unavailable"
+            message={error}
+          />
         </div>
       ) : sortedEvents.length === 0 ? (
         <div className="p-6">
-          <div className="border border-dashed border-black/15 bg-[#f8fafc] px-5 py-12 text-center text-sm text-gray-500">
-            No employment history has been recorded yet.
-          </div>
+          <EmptyState
+            icon={<History size={20} />}
+            title="No employment history yet"
+            description="Audited lifecycle and employment structure changes will appear here once they are recorded."
+          />
         </div>
       ) : (
-        <div className="divide-y divide-black/10">
-          {sortedEvents.map((event) => {
+        <div>
+          {sortedEvents.map((event, index) => {
             const changes = snapshotChanges(event);
             return (
-              <article key={event.id} className="grid gap-5 p-6 lg:grid-cols-[190px_1fr]">
-                <div>
-                  <div className="inline-flex items-center gap-2 border border-black/10 bg-[#f8fafc] px-3 py-2 text-xs font-semibold text-[#111827]">
-                    {eventIcon(event.eventType)}
+              <article
+                key={event.id}
+                className={`relative grid gap-5 px-6 py-6 lg:grid-cols-[210px_1fr] ${
+                  index === 0 ? '' : 'border-t border-[var(--border)]'
+                }`}
+              >
+                <div className="relative lg:pr-5">
+                  <div className="inline-flex items-center gap-2 border border-[var(--border-strong)] bg-[var(--surface-soft)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[var(--text-soft)]">
+                    <span className="text-[var(--accent)]">{eventIcon(event.eventType)}</span>
                     {eventLabel(event.eventType)}
                   </div>
-                  <p className="mt-3 text-xs uppercase tracking-[0.14em] text-gray-400">
-                    Effective
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-[#111827]">
-                    {formatDate(event.effectiveDate)}
-                  </p>
-                  <p className="mt-3 text-xs text-gray-400">
+
+                  <div className="mt-4 border-l-2 border-[var(--accent)] pl-3">
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Effective
+                    </p>
+                    <p className="mt-1 text-sm font-black text-[var(--text)]">
+                      {formatDate(event.effectiveDate)}
+                    </p>
+                  </div>
+
+                  <p className="mt-3 text-xs font-medium leading-5 text-[var(--muted)]">
                     Recorded {formatDateTime(event.recordedAt)}
                   </p>
                 </div>
 
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#111827]">
+                <div className="min-w-0 lg:border-l lg:border-[var(--border)] lg:pl-6">
+                  <p className="text-sm font-extrabold leading-6 text-[var(--text)]">
                     {event.message}
                   </p>
+
                   {event.reason ? (
-                    <p className="mt-2 text-sm leading-6 text-gray-600">
+                    <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[var(--muted)]">
                       {event.reason}
                     </p>
                   ) : null}
 
                   {changes.length ? (
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                       {changes.map((change) => (
                         <div
                           key={change.key}
-                          className="border border-black/10 bg-[#f8fafc] px-3 py-3"
+                          className="border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-3"
                         >
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-gray-400">
+                          <p className="text-[11px] font-extrabold uppercase tracking-[0.13em] text-[var(--muted)]">
                             {change.label}
                           </p>
-                          <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+                          <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-[var(--text-soft)]">
                             <span className="min-w-0 truncate">
                               {label(change.previous)}
                             </span>
-                            <ArrowRight size={13} className="shrink-0 text-gray-400" />
-                            <span className="min-w-0 truncate font-medium text-[#111827]">
+                            <ArrowRight size={13} className="shrink-0 text-[var(--accent)]" />
+                            <span className="min-w-0 truncate font-extrabold text-[var(--text)]">
                               {label(change.next)}
                             </span>
                           </div>
@@ -252,12 +280,12 @@ export function EmployeeEmploymentHistory({ employeeId, refreshKey }: Props) {
                     </div>
                   ) : null}
 
-                  <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-400">
-                    {event.changedByUserId ? (
-                      <span>Changed by user {event.changedByUserId}</span>
-                    ) : (
-                      <span>System-recorded event</span>
-                    )}
+                  <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-[var(--border)] pt-3 text-xs font-medium text-[var(--muted)]">
+                    <span>
+                      {event.changedByUserId
+                        ? `Changed by user ${event.changedByUserId}`
+                        : 'System-recorded event'}
+                    </span>
                     <span>Event ID {event.id}</span>
                   </div>
                 </div>
