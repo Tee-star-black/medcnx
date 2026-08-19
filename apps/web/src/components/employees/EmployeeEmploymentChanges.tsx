@@ -1,14 +1,24 @@
 'use client';
 
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowRightLeft, BriefcaseBusiness, Loader2, RefreshCw, X } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  BriefcaseBusiness,
+  Loader2,
+  RefreshCw,
+  X,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 
 type ChangeAction = 'PROMOTE' | 'TRANSFER' | 'EMPLOYMENT_TYPE';
 
-type Department = {
+type Position = {
   id: string;
-  name: string;
+  code: string;
+  title: string;
+  departmentId?: string | null;
+  active: boolean;
+  department?: { id: string; name: string } | null;
 };
 
 type EmployeeTarget = {
@@ -41,26 +51,25 @@ const actionConfig: Record<
   {
     title: string;
     helper: string;
-    endpoint: string;
     submitLabel: string;
   }
 > = {
   PROMOTE: {
-    title: 'Promote employee',
-    helper: 'Record a controlled job-title change in employment history.',
-    endpoint: 'promote',
-    submitLabel: 'Record promotion',
+    title: 'Promote / change position',
+    helper:
+      'Move the employee to another position in the current department while preserving assignment history.',
+    submitLabel: 'Record position change',
   },
   TRANSFER: {
     title: 'Transfer department',
-    helper: 'Move the employee to another department with an auditable effective date.',
-    endpoint: 'transfer',
+    helper:
+      'Move the employee to a position in another department so position, title and department remain aligned.',
     submitLabel: 'Record transfer',
   },
   EMPLOYMENT_TYPE: {
     title: 'Change employment type',
-    helper: 'Record a change such as full-time, part-time, fixed-term or contract.',
-    endpoint: 'type',
+    helper:
+      'Record a change such as full-time, part-time, fixed-term or contract.',
     submitLabel: 'Change employment type',
   },
 };
@@ -76,20 +85,47 @@ function readError(error: unknown, fallback: string) {
   return Array.isArray(message) ? message.join(' ') : message || fallback;
 }
 
-export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Props) {
+export function EmployeeEmploymentChanges({
+  employee,
+  onChanged,
+  onError,
+}: Props) {
   const [action, setAction] = useState<ChangeAction | null>(null);
   const [busy, setBusy] = useState(false);
-  const [departmentsLoading, setDepartmentsLoading] = useState(false);
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [effectiveDate, setEffectiveDate] = useState(todayIsoDate());
   const [reason, setReason] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
+  const [positionId, setPositionId] = useState('');
   const [employmentType, setEmploymentType] = useState('');
 
   const today = todayIsoDate();
   const config = action ? actionConfig[action] : null;
-  const employmentClosed = ['TERMINATED', 'RESIGNED'].includes(employee.employmentStatus);
+  const employmentClosed = ['TERMINATED', 'RESIGNED'].includes(
+    employee.employmentStatus,
+  );
+
+  const eligiblePositions = useMemo(() => {
+    const currentDepartmentId = employee.department?.id ?? null;
+    return positions.filter((position) => {
+      if (!position.active) return false;
+      if (action === 'PROMOTE') {
+        return (
+          (position.departmentId ?? null) === currentDepartmentId &&
+          position.title !== employee.jobTitle
+        );
+      }
+      if (action === 'TRANSFER') {
+        return Boolean(position.departmentId) && position.departmentId !== currentDepartmentId;
+      }
+      return false;
+    });
+  }, [action, employee.department?.id, employee.jobTitle, positions]);
+
+  const selectedPosition = useMemo(
+    () => positions.find((position) => position.id === positionId) ?? null,
+    [positionId, positions],
+  );
 
   const formError = useMemo(() => {
     if (!action) return '';
@@ -100,21 +136,13 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
     if (employee.startDate && effectiveDate < employee.startDate.slice(0, 10)) {
       return 'The effective date cannot be before the employee start date.';
     }
-    if (reason.trim().length < 3) return 'Provide a reason of at least 3 characters.';
-
-    if (action === 'PROMOTE') {
-      const nextTitle = jobTitle.trim();
-      if (nextTitle.length < 2) return 'Provide the new job title.';
-      if (nextTitle === (employee.jobTitle ?? '').trim()) {
-        return 'The new job title must differ from the current job title.';
-      }
+    if (reason.trim().length < 3) {
+      return 'Provide a reason of at least 3 characters.';
     }
 
-    if (action === 'TRANSFER') {
-      if (!departmentId) return 'Select the destination department.';
-      if (departmentId === employee.department?.id) {
-        return 'Select a department different from the current department.';
-      }
+    if (action === 'PROMOTE' || action === 'TRANSFER') {
+      if (!positionId) return 'Select the destination position.';
+      if (!selectedPosition) return 'Select a valid destination position.';
     }
 
     if (action === 'EMPLOYMENT_TYPE') {
@@ -128,28 +156,26 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
     return '';
   }, [
     action,
-    departmentId,
     effectiveDate,
-    employee.department?.id,
     employee.employmentType,
-    employee.jobTitle,
     employee.startDate,
     employmentType,
-    jobTitle,
+    positionId,
     reason,
+    selectedPosition,
     today,
   ]);
 
-  async function loadDepartments() {
-    if (departments.length || departmentsLoading) return;
-    setDepartmentsLoading(true);
+  async function loadPositions() {
+    if (positions.length || positionsLoading) return;
+    setPositionsLoading(true);
     try {
-      const response = await api.get<Department[]>('/departments');
-      setDepartments(response.data);
+      const response = await api.get<Position[]>('/positions');
+      setPositions(response.data);
     } catch (error: unknown) {
-      onError(readError(error, 'Could not load departments for this transfer.'));
+      onError(readError(error, 'Could not load positions for this employment change.'));
     } finally {
-      setDepartmentsLoading(false);
+      setPositionsLoading(false);
     }
   }
 
@@ -157,11 +183,12 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
     setAction(nextAction);
     setEffectiveDate(todayIsoDate());
     setReason('');
-    setJobTitle('');
-    setDepartmentId('');
+    setPositionId('');
     setEmploymentType('');
     onError('');
-    if (nextAction === 'TRANSFER') void loadDepartments();
+    if (nextAction === 'PROMOTE' || nextAction === 'TRANSFER') {
+      void loadPositions();
+    }
   }
 
   function close() {
@@ -173,28 +200,43 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
     event.preventDefault();
     if (!action || !config || formError) return;
 
+    const destination = selectedPosition
+      ? ` to ${selectedPosition.title}${selectedPosition.department?.name ? ` (${selectedPosition.department.name})` : ''}`
+      : '';
     const confirmed = window.confirm(
-      `${config.title} for ${employee.firstName} ${employee.lastName} effective ${effectiveDate}? This change will be written to employment history.`,
+      `${config.title} for ${employee.firstName} ${employee.lastName}${destination} effective ${effectiveDate}? This change will be written to employment history.`,
     );
     if (!confirmed) return;
-
-    const payload: Record<string, string> = {
-      effectiveDate,
-      reason: reason.trim(),
-    };
-    if (action === 'PROMOTE') payload.jobTitle = jobTitle.trim();
-    if (action === 'TRANSFER') payload.departmentId = departmentId;
-    if (action === 'EMPLOYMENT_TYPE') payload.employmentType = employmentType.trim();
 
     setBusy(true);
     onError('');
     try {
-      const response = await api.post<{ message?: string }>(
-        `/employees/${employee.id}/employment/${config.endpoint}`,
-        payload,
-      );
-      setAction(null);
-      await onChanged(response.data?.message || `${config.title} completed successfully.`);
+      if (action === 'PROMOTE' || action === 'TRANSFER') {
+        await api.post(`/positions/assignments/${employee.id}`, {
+          positionId,
+          effectiveDate,
+          reason: reason.trim(),
+        });
+        setAction(null);
+        await onChanged(
+          action === 'TRANSFER'
+            ? `Employee transferred to ${selectedPosition?.title ?? 'the selected position'} successfully.`
+            : `Employee position changed to ${selectedPosition?.title ?? 'the selected position'} successfully.`,
+        );
+      } else {
+        const response = await api.post<{ message?: string }>(
+          `/employees/${employee.id}/employment/type`,
+          {
+            effectiveDate,
+            reason: reason.trim(),
+            employmentType: employmentType.trim(),
+          },
+        );
+        setAction(null);
+        await onChanged(
+          response.data?.message || 'Employment type changed successfully.',
+        );
+      }
     } catch (error: unknown) {
       onError(readError(error, `Could not ${config.title.toLowerCase()}.`));
     } finally {
@@ -205,7 +247,7 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
   if (employmentClosed) {
     return (
       <div className="border border-black/10 bg-[#f8fafc] p-4 text-sm leading-6 text-gray-600">
-        Employment is closed. Promotion, transfer and employment-type changes are no longer available.
+        Employment is closed. Position, transfer and employment-type changes are no longer available.
       </div>
     );
   }
@@ -214,20 +256,32 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
     <>
       <div className="grid gap-3">
         <ChangeButton
-          title="Promote employee"
-          helper={employee.jobTitle ? `Current title: ${employee.jobTitle}` : 'No current job title recorded.'}
+          title="Promote / change position"
+          helper={
+            employee.jobTitle
+              ? `Current title: ${employee.jobTitle}`
+              : 'No current job title recorded.'
+          }
           icon={<BriefcaseBusiness size={16} />}
           onClick={() => openAction('PROMOTE')}
         />
         <ChangeButton
           title="Transfer department"
-          helper={employee.department ? `Current department: ${employee.department.name}` : 'No current department assigned.'}
+          helper={
+            employee.department
+              ? `Current department: ${employee.department.name}`
+              : 'No current department assigned.'
+          }
           icon={<ArrowRightLeft size={16} />}
           onClick={() => openAction('TRANSFER')}
         />
         <ChangeButton
           title="Change employment type"
-          helper={employee.employmentType ? `Current type: ${employee.employmentType}` : 'No current employment type recorded.'}
+          helper={
+            employee.employmentType
+              ? `Current type: ${employee.employmentType}`
+              : 'No current employment type recorded.'
+          }
           icon={<RefreshCw size={16} />}
           onClick={() => openAction('EMPLOYMENT_TYPE')}
         />
@@ -238,9 +292,15 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
           <div className="max-h-[92vh] w-full overflow-y-auto bg-white shadow-2xl sm:max-w-lg">
             <div className="flex items-start justify-between gap-4 border-b border-black/10 p-6">
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Employment change</p>
-                <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[#111827]">{config.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-gray-500">{config.helper}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-gray-400">
+                  Employment change
+                </p>
+                <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[#111827]">
+                  {config.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-500">
+                  {config.helper}
+                </p>
               </div>
               <button
                 type="button"
@@ -254,44 +314,45 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
             </div>
 
             <form onSubmit={submit} className="space-y-5 p-6">
-              {action === 'PROMOTE' ? (
+              {action === 'PROMOTE' || action === 'TRANSFER' ? (
                 <div>
-                  <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">New job title</label>
-                  <input
-                    required
-                    minLength={2}
-                    maxLength={150}
-                    value={jobTitle}
-                    onChange={(event) => setJobTitle(event.target.value)}
-                    placeholder="e.g. Senior Operations Manager"
-                    className="mt-2 h-11 w-full border border-black/10 bg-[#f8fafc] px-3 text-sm outline-none transition focus:border-black"
-                  />
-                </div>
-              ) : null}
-
-              {action === 'TRANSFER' ? (
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Destination department</label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                    Destination position
+                  </label>
                   <select
                     required
-                    value={departmentId}
-                    onChange={(event) => setDepartmentId(event.target.value)}
-                    disabled={departmentsLoading}
+                    value={positionId}
+                    onChange={(event) => setPositionId(event.target.value)}
+                    disabled={positionsLoading}
                     className="mt-2 h-11 w-full border border-black/10 bg-[#f8fafc] px-3 text-sm outline-none transition focus:border-black disabled:opacity-60"
                   >
-                    <option value="">{departmentsLoading ? 'Loading departments...' : 'Select department'}</option>
-                    {departments
-                      .filter((department) => department.id !== employee.department?.id)
-                      .map((department) => (
-                        <option key={department.id} value={department.id}>{department.name}</option>
-                      ))}
+                    <option value="">
+                      {positionsLoading
+                        ? 'Loading positions...'
+                        : 'Select destination position'}
+                    </option>
+                    {eligiblePositions.map((position) => (
+                      <option key={position.id} value={position.id}>
+                        {position.code} · {position.title}
+                        {position.department?.name
+                          ? ` · ${position.department.name}`
+                          : ''}
+                      </option>
+                    ))}
                   </select>
+                  {!positionsLoading && eligiblePositions.length === 0 ? (
+                    <p className="mt-2 text-xs leading-5 text-amber-700">
+                      No eligible active destination positions are currently available for this change.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
               {action === 'EMPLOYMENT_TYPE' ? (
                 <div>
-                  <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">New employment type</label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                    New employment type
+                  </label>
                   <input
                     required
                     minLength={2}
@@ -314,7 +375,9 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
               ) : null}
 
               <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Effective date</label>
+                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Effective date
+                </label>
                 <input
                   required
                   type="date"
@@ -327,7 +390,9 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
               </div>
 
               <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Reason</label>
+                <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Reason
+                </label>
                 <textarea
                   required
                   minLength={3}
@@ -340,13 +405,33 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
                 />
               </div>
 
+              {selectedPosition &&
+              (action === 'PROMOTE' || action === 'TRANSFER') ? (
+                <div className="border border-black/10 bg-[#f8fafc] px-4 py-3 text-sm leading-6 text-gray-600">
+                  This will close the current position assignment, open the selected assignment, update the employee job title, and align the department to the destination position when required.
+                </div>
+              ) : null}
+
               {formError ? (
-                <div className="border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{formError}</div>
+                <div className="border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {formError}
+                </div>
               ) : null}
 
               <div className="flex flex-col-reverse gap-3 border-t border-black/10 pt-5 sm:flex-row sm:justify-end">
-                <button type="button" onClick={close} disabled={busy} className="border border-black/10 bg-white px-5 py-3 text-sm font-medium text-gray-600 hover:border-black disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={busy || Boolean(formError)} className="inline-flex items-center justify-center gap-2 border border-black bg-black px-5 py-3 text-sm font-medium text-white hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={close}
+                  disabled={busy}
+                  className="border border-black/10 bg-white px-5 py-3 text-sm font-medium text-gray-600 hover:border-black disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy || Boolean(formError)}
+                  className="inline-flex items-center justify-center gap-2 border border-black bg-black px-5 py-3 text-sm font-medium text-white hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   {busy ? <Loader2 className="animate-spin" size={16} /> : null}
                   {config.submitLabel}
                 </button>
@@ -359,9 +444,23 @@ export function EmployeeEmploymentChanges({ employee, onChanged, onError }: Prop
   );
 }
 
-function ChangeButton({ title, helper, icon, onClick }: { title: string; helper: string; icon: React.ReactNode; onClick: () => void }) {
+function ChangeButton({
+  title,
+  helper,
+  icon,
+  onClick,
+}: {
+  title: string;
+  helper: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" onClick={onClick} className="flex w-full items-start gap-3 border border-black/10 bg-[#f8fafc] px-4 py-3 text-left text-gray-700 transition hover:border-black hover:text-black">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start gap-3 border border-black/10 bg-[#f8fafc] px-4 py-3 text-left text-gray-700 transition hover:border-black hover:text-black"
+    >
       <span className="mt-0.5 shrink-0">{icon}</span>
       <span>
         <span className="block text-sm font-semibold">{title}</span>
