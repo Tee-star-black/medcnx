@@ -311,7 +311,7 @@ export class RecruitmentService {
     if (!job) throw new NotFoundException('Recruitment job not found.');
     if (job.status !== RecruitmentJobStatus.OPEN) {
       throw new BadRequestException(
-        'Applications can only be added to OPEN recruitment jobs.',
+        'Applications can only be added to open recruitment jobs.',
       );
     }
     if (!candidate) throw new NotFoundException('Candidate not found.');
