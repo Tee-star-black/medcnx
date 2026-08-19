@@ -7,6 +7,7 @@ import {
 import {
   AuditAction,
   EmploymentStatus,
+  Prisma,
   RecruitmentJobStatus,
 } from '@prisma/client';
 import { AccessScopeService } from '../auth/access-scope.service';
@@ -16,6 +17,8 @@ import { AssignPositionDto } from './dto/assign-position.dto';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { CreatePositionRecruitmentJobDto } from './dto/create-position-recruitment-job.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
+
+const SERIALIZABLE_RETRY_LIMIT = 3;
 
 @Injectable()
 export class PositionsService {
@@ -593,32 +596,6 @@ export class PositionsService {
   ) {
     await this.accessScope.assertEmployeeAccess(user, employeeId);
 
-    const employee = await this.prisma.employee.findFirst({
-      where: { id: employeeId, organisationId: user.organisationId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        departmentId: true,
-        jobTitle: true,
-        employmentStatus: true,
-        startDate: true,
-      },
-    });
-
-    if (!employee) throw new NotFoundException('Employee not found.');
-    if (
-      employee.employmentStatus === EmploymentStatus.TERMINATED ||
-      employee.employmentStatus === EmploymentStatus.RESIGNED
-    ) {
-      throw new BadRequestException(
-        'Inactive employees cannot be assigned a position.',
-      );
-    }
-
-    const position = await this.getPosition(user, dto.positionId);
-    if (!position.active) throw new BadRequestException('Position is archived.');
-
     const effectiveDate = new Date(dto.effectiveDate);
     if (Number.isNaN(effectiveDate.getTime())) {
       throw new BadRequestException(
@@ -633,102 +610,195 @@ export class PositionsService {
         'Position effective date cannot be in the future until scheduled position changes are supported.',
       );
     }
-    if (employee.startDate && effectiveDate < employee.startDate) {
-      throw new BadRequestException(
-        'Position effective date cannot precede the employee start date.',
-      );
-    }
 
-    const current = await this.prisma.employeePositionAssignment.findFirst({
-      where: {
-        organisationId: user.organisationId,
-        employeeId,
-        effectiveTo: null,
-      },
-    });
+    for (let attempt = 1; attempt <= SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (transaction) => {
+            const employee = await transaction.employee.findFirst({
+              where: {
+                id: employeeId,
+                organisationId: user.organisationId,
+              },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                departmentId: true,
+                jobTitle: true,
+                employmentStatus: true,
+                startDate: true,
+              },
+            });
 
-    if (current?.positionId === position.id) {
-      throw new ConflictException('Employee is already assigned to this position.');
-    }
-    if (current && effectiveDate < current.effectiveFrom) {
-      throw new BadRequestException(
-        'New position effective date cannot precede the current assignment start date.',
-      );
-    }
+            if (!employee) throw new NotFoundException('Employee not found.');
+            if (
+              employee.employmentStatus === EmploymentStatus.TERMINATED ||
+              employee.employmentStatus === EmploymentStatus.RESIGNED
+            ) {
+              throw new BadRequestException(
+                'Inactive employees cannot be assigned a position.',
+              );
+            }
+            if (employee.startDate && effectiveDate < employee.startDate) {
+              throw new BadRequestException(
+                'Position effective date cannot precede the employee start date.',
+              );
+            }
 
-    const previousPosition = current
-      ? await this.prisma.position.findFirst({
-          where: {
-            id: current.positionId,
-            organisationId: user.organisationId,
+            const position = await transaction.position.findFirst({
+              where: {
+                id: dto.positionId,
+                organisationId: user.organisationId,
+              },
+            });
+            if (!position) throw new NotFoundException('Position not found.');
+            if (!position.active) {
+              throw new BadRequestException('Position is archived.');
+            }
+
+            const current =
+              await transaction.employeePositionAssignment.findFirst({
+                where: {
+                  organisationId: user.organisationId,
+                  employeeId,
+                  effectiveTo: null,
+                },
+              });
+
+            if (current?.positionId === position.id) {
+              throw new ConflictException(
+                'Employee is already assigned to this position.',
+              );
+            }
+            if (current && effectiveDate < current.effectiveFrom) {
+              throw new BadRequestException(
+                'New position effective date cannot precede the current assignment start date.',
+              );
+            }
+
+            const currentHeadcount =
+              await transaction.employeePositionAssignment.count({
+                where: {
+                  organisationId: user.organisationId,
+                  positionId: position.id,
+                  effectiveTo: null,
+                },
+              });
+
+            if (currentHeadcount >= position.approvedHeadcount) {
+              throw new ConflictException(
+                `Position ${position.code} is at approved headcount capacity (${currentHeadcount}/${position.approvedHeadcount}).`,
+              );
+            }
+
+            const previousPosition = current
+              ? await transaction.position.findFirst({
+                  where: {
+                    id: current.positionId,
+                    organisationId: user.organisationId,
+                  },
+                })
+              : null;
+            const nextDepartmentId =
+              position.departmentId ?? employee.departmentId;
+
+            if (current) {
+              await transaction.employeePositionAssignment.update({
+                where: { id: current.id },
+                data: { effectiveTo: effectiveDate },
+              });
+            }
+
+            const assignment =
+              await transaction.employeePositionAssignment.create({
+                data: {
+                  organisationId: user.organisationId,
+                  employeeId,
+                  positionId: position.id,
+                  effectiveFrom: effectiveDate,
+                  reason: dto.reason?.trim(),
+                  assignedByUserId: user.id,
+                },
+              });
+
+            await transaction.employee.update({
+              where: { id: employeeId },
+              data: {
+                jobTitle: position.title,
+                ...(nextDepartmentId !== employee.departmentId
+                  ? { departmentId: nextDepartmentId }
+                  : {}),
+              },
+            });
+
+            await transaction.auditLog.create({
+              data: {
+                organisationId: user.organisationId,
+                actorUserId: user.id,
+                employeeId,
+                action: AuditAction.UPDATE,
+                entity: 'EmployeeLifecycle',
+                entityId: employeeId,
+                message: `POSITION_CHANGED: ${employee.firstName} ${employee.lastName}.`,
+                metadata: {
+                  eventType: 'POSITION_CHANGED',
+                  effectiveDate: effectiveDate.toISOString(),
+                  reason: dto.reason?.trim() ?? null,
+                  previousPositionId: previousPosition?.id ?? null,
+                  previousPositionCode: previousPosition?.code ?? null,
+                  previousPositionTitle:
+                    previousPosition?.title ?? employee.jobTitle,
+                  nextPositionId: position.id,
+                  nextPositionCode: position.code,
+                  nextPositionTitle: position.title,
+                  previousDepartmentId: employee.departmentId,
+                  departmentId: nextDepartmentId,
+                  approvedHeadcount: position.approvedHeadcount,
+                  currentHeadcountBefore: currentHeadcount,
+                  currentHeadcountAfter: currentHeadcount + 1,
+                },
+              },
+            });
+
+            return {
+              assignment,
+              position,
+              employeeDepartmentId: nextDepartmentId,
+              capacitySnapshot: {
+                approvedHeadcount: position.approvedHeadcount,
+                currentHeadcountBefore: currentHeadcount,
+                currentHeadcountAfter: currentHeadcount + 1,
+                remainingCapacity: Math.max(
+                  position.approvedHeadcount - (currentHeadcount + 1),
+                  0,
+                ),
+              },
+            };
           },
-        })
-      : null;
-    const nextDepartmentId = position.departmentId ?? employee.departmentId;
-
-    const assignment = await this.prisma.$transaction(async (transaction) => {
-      if (current) {
-        await transaction.employeePositionAssignment.update({
-          where: { id: current.id },
-          data: { effectiveTo: effectiveDate },
-        });
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
+      } catch (error: unknown) {
+        if (
+          this.isSerializableConflict(error) &&
+          attempt < SERIALIZABLE_RETRY_LIMIT
+        ) {
+          continue;
+        }
+        if (this.isSerializableConflict(error)) {
+          throw new ConflictException(
+            'Position capacity or assignment changed while this move was being processed. Refresh and try again.',
+          );
+        }
+        throw error;
       }
+    }
 
-      const created = await transaction.employeePositionAssignment.create({
-        data: {
-          organisationId: user.organisationId,
-          employeeId,
-          positionId: position.id,
-          effectiveFrom: effectiveDate,
-          reason: dto.reason?.trim(),
-          assignedByUserId: user.id,
-        },
-      });
-
-      await transaction.employee.update({
-        where: { id: employeeId },
-        data: {
-          jobTitle: position.title,
-          ...(nextDepartmentId !== employee.departmentId
-            ? { departmentId: nextDepartmentId }
-            : {}),
-        },
-      });
-
-      await transaction.auditLog.create({
-        data: {
-          organisationId: user.organisationId,
-          actorUserId: user.id,
-          employeeId,
-          action: AuditAction.UPDATE,
-          entity: 'EmployeeLifecycle',
-          entityId: employeeId,
-          message: `POSITION_CHANGED: ${employee.firstName} ${employee.lastName}.`,
-          metadata: {
-            eventType: 'POSITION_CHANGED',
-            effectiveDate: effectiveDate.toISOString(),
-            reason: dto.reason?.trim() ?? null,
-            previousPositionId: previousPosition?.id ?? null,
-            previousPositionCode: previousPosition?.code ?? null,
-            previousPositionTitle:
-              previousPosition?.title ?? employee.jobTitle,
-            nextPositionId: position.id,
-            nextPositionCode: position.code,
-            nextPositionTitle: position.title,
-            previousDepartmentId: employee.departmentId,
-            departmentId: nextDepartmentId,
-          },
-        },
-      });
-
-      return created;
-    });
-
-    return {
-      assignment,
-      position,
-      employeeDepartmentId: nextDepartmentId,
-    };
+    throw new ConflictException(
+      'Position capacity or assignment changed while this move was being processed. Refresh and try again.',
+    );
   }
 
   async employeeHistory(user: CurrentUser, employeeId: string) {
@@ -740,6 +810,15 @@ export class PositionsService {
       },
       orderBy: { effectiveFrom: 'desc' },
     });
+  }
+
+  private isSerializableConflict(error: unknown) {
+    return Boolean(
+      error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code?: string }).code === 'P2034',
+    );
   }
 
   private async getPosition(user: CurrentUser, positionId: string) {
