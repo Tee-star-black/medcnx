@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { EmploymentStatus } from '@prisma/client';
+import { EmploymentStatus, Prisma } from '@prisma/client';
 import { PositionsService } from './positions.service';
 import { PrismaService } from '../database/prisma.service';
 import { AccessScopeService } from '../auth/access-scope.service';
@@ -17,7 +17,10 @@ describe('PositionsService', () => {
     sessionId: 'session-1',
   };
 
-  it('closes the previous assignment and creates an effective-dated replacement', async () => {
+  function assignmentFixture(options?: {
+    approvedHeadcount?: number;
+    currentHeadcount?: number;
+  }) {
     const current = {
       id: 'assignment-1',
       organisationId: 'org-1',
@@ -25,6 +28,15 @@ describe('PositionsService', () => {
       positionId: 'position-old',
       effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
       effectiveTo: null,
+    };
+    const employee = {
+      id: 'employee-1',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      departmentId: 'department-1',
+      jobTitle: 'Registered Nurse',
+      employmentStatus: EmploymentStatus.ACTIVE,
+      startDate: new Date('2026-01-01T00:00:00.000Z'),
     };
     const nextPosition = {
       id: 'position-new',
@@ -35,7 +47,7 @@ describe('PositionsService', () => {
       description: null,
       level: 'Senior',
       employmentCategory: 'Clinical',
-      approvedHeadcount: 4,
+      approvedHeadcount: options?.approvedHeadcount ?? 4,
       active: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -46,26 +58,10 @@ describe('PositionsService', () => {
       code: 'RN-001',
       title: 'Registered Nurse',
     };
-
     const transaction = {
-      employeePositionAssignment: {
-        update: jest.fn().mockResolvedValue({}),
-        create: jest.fn().mockResolvedValue({ id: 'assignment-2' }),
-      },
-      employee: { update: jest.fn().mockResolvedValue({}) },
-      auditLog: { create: jest.fn().mockResolvedValue({}) },
-    };
-
-    const prisma = {
       employee: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'employee-1',
-          firstName: 'Ada',
-          lastName: 'Lovelace',
-          departmentId: 'department-1',
-          jobTitle: 'Registered Nurse',
-          employmentStatus: EmploymentStatus.ACTIVE,
-        }),
+        findFirst: jest.fn().mockResolvedValue(employee),
+        update: jest.fn().mockResolvedValue({}),
       },
       position: {
         findFirst: jest
@@ -75,15 +71,33 @@ describe('PositionsService', () => {
       },
       employeePositionAssignment: {
         findFirst: jest.fn().mockResolvedValue(current),
+        count: jest.fn().mockResolvedValue(options?.currentHeadcount ?? 1),
+        update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({ id: 'assignment-2' }),
       },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
       $transaction: jest.fn(async (callback: any) => callback(transaction)),
     } as unknown as PrismaService;
-
     const accessScope = {
       assertEmployeeAccess: jest.fn().mockResolvedValue(undefined),
     } as unknown as AccessScopeService;
 
-    const service = new PositionsService(prisma, accessScope);
+    return {
+      service: new PositionsService(prisma, accessScope),
+      prisma,
+      transaction,
+      current,
+      employee,
+      nextPosition,
+      previousPosition,
+    };
+  }
+
+  it('closes the previous assignment and creates an effective-dated replacement', async () => {
+    const { service, prisma, transaction, current, nextPosition } =
+      assignmentFixture();
     const effectiveDate = '2026-08-17T00:00:00.000Z';
 
     const result = await service.assignEmployee(actor, 'employee-1', {
@@ -113,11 +127,70 @@ describe('PositionsService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           entity: 'EmployeeLifecycle',
-          metadata: expect.objectContaining({ eventType: 'POSITION_CHANGED' }),
+          metadata: expect.objectContaining({
+            eventType: 'POSITION_CHANGED',
+            approvedHeadcount: 4,
+            currentHeadcountBefore: 1,
+            currentHeadcountAfter: 2,
+          }),
         }),
       }),
     );
     expect(result.position.id).toBe(nextPosition.id);
+    expect(result.capacitySnapshot).toEqual({
+      approvedHeadcount: 4,
+      currentHeadcountBefore: 1,
+      currentHeadcountAfter: 2,
+      remainingCapacity: 2,
+    });
+    expect(prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }),
+    );
+  });
+
+  it('rejects a manual assignment when approved headcount is already full', async () => {
+    const { service, transaction, nextPosition } = assignmentFixture({
+      approvedHeadcount: 4,
+      currentHeadcount: 4,
+    });
+
+    await expect(
+      service.assignEmployee(actor, 'employee-1', {
+        positionId: nextPosition.id,
+        effectiveDate: '2026-08-17T00:00:00.000Z',
+        reason: 'Requested move.',
+      }),
+    ).rejects.toThrow(
+      'Position SRN-001 is at approved headcount capacity (4/4).',
+    );
+
+    expect(transaction.employeePositionAssignment.update).not.toHaveBeenCalled();
+    expect(transaction.employeePositionAssignment.create).not.toHaveBeenCalled();
+    expect(transaction.employee.update).not.toHaveBeenCalled();
+  });
+
+  it('retries a serializable assignment conflict before completing the move', async () => {
+    const { service, prisma, transaction, nextPosition } = assignmentFixture({
+      approvedHeadcount: 4,
+      currentHeadcount: 3,
+    });
+    const transactionMock = prisma.$transaction as jest.Mock;
+    transactionMock
+      .mockRejectedValueOnce({ code: 'P2034' })
+      .mockImplementationOnce(async (callback: any) => callback(transaction));
+
+    const result = await service.assignEmployee(actor, 'employee-1', {
+      positionId: nextPosition.id,
+      effectiveDate: '2026-08-17T00:00:00.000Z',
+      reason: 'Approved move.',
+    });
+
+    expect(transactionMock).toHaveBeenCalledTimes(2);
+    expect(result.capacitySnapshot.currentHeadcountAfter).toBe(4);
+    expect(result.capacitySnapshot.remainingCapacity).toBe(0);
   });
 
   it('creates a recruitment job from an approved position vacancy transactionally', async () => {
