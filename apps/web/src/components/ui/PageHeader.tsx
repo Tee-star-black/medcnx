@@ -26,7 +26,7 @@ function Action({
 }) {
   const className = primary
     ? "inline-flex min-h-11 items-center justify-center gap-2 border border-[var(--accent)] bg-[var(--accent)] px-5 text-sm font-extrabold text-[var(--accent-text)] hover:border-[var(--accent-hover)] hover:bg-[var(--accent-hover)]"
-    : "inline-flex min-h-11 items-center justify-center gap-2 border border-[var(--border-strong)] bg-[var(--surface)] px-5 text-sm font-bold text-[var(--text-soft)] hover:border-[var(--accent)] hover:text-[var(--accent)]";
+    : "inline-flex min-h-11 items-center justify-center gap-2 border border-[var(--border-strong)] bg-[var(--surface)] px-5 text-sm font-bold text-[var(--text)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent-hover)]";
 
   if (action.href) {
     return (
@@ -54,22 +54,17 @@ export function PageHeader({
   tools,
 }: PageHeaderProps) {
   return (
-    <header className="clinical-page-header border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex min-h-[164px] flex-col gap-6 px-6 py-7 lg:flex-row lg:items-end lg:justify-between lg:px-8">
+    <header className="clinical-page-header border border-[var(--border-strong)] bg-[var(--surface)]">
+      <div className="grid min-h-[168px] gap-6 px-6 py-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:px-8">
         <div className="max-w-3xl">
-          <p className="clinical-page-eyebrow">
-            {category}
-          </p>
-          <h1 className="clinical-page-title">
-            {title}
-          </h1>
-          <p className="clinical-page-description">
-            {description}
-          </p>
+          <div className="mb-5 h-[3px] w-12 bg-[var(--accent)]" aria-hidden="true" />
+          <p className="clinical-page-eyebrow">{category}</p>
+          <h1 className="clinical-page-title">{title}</h1>
+          <p className="clinical-page-description max-w-2xl">{description}</p>
         </div>
 
         {primaryAction || secondaryAction ? (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 lg:justify-end">
             {secondaryAction ? <Action action={secondaryAction} /> : null}
             {primaryAction ? <Action action={primaryAction} primary /> : null}
           </div>
@@ -77,7 +72,7 @@ export function PageHeader({
       </div>
 
       {tools ? (
-        <div className="border-t border-[var(--border)] bg-[var(--surface-soft)] px-6 py-4 lg:px-7">
+        <div className="border-t border-[var(--border)] bg-[var(--surface-soft)] px-6 py-4 lg:px-8">
           {tools}
         </div>
       ) : null}
