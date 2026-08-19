@@ -3,24 +3,25 @@ type StatusBadgeProps = {
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const formattedStatus = status.replace('_', ' ');
+  const formattedStatus = status.replaceAll('_', ' ');
 
   const isActive = status === 'ACTIVE';
   const isWarning = status === 'SUSPENDED' || status === 'ON_LEAVE';
   const isInactive = status === 'TERMINATED' || status === 'RESIGNED';
 
   const className = isActive
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
     : isWarning
-      ? 'border-amber-200 bg-amber-50 text-amber-700'
+      ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
       : isInactive
-        ? 'border-red-200 bg-red-50 text-red-700'
-        : 'border-[var(--border)] bg-[var(--surface-soft)] text-[var(--text-soft)]';
+        ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'
+        : 'border-[var(--border-strong)] bg-[var(--surface-soft)] text-[var(--text-soft)]';
 
   return (
     <span
-      className={`inline-flex border border-l-[3px] px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.05em] ${className}`}
+      className={`inline-flex items-center gap-2 border px-2.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.09em] ${className}`}
     >
+      <span className="h-1.5 w-1.5 bg-current" aria-hidden="true" />
       {formattedStatus}
     </span>
   );
