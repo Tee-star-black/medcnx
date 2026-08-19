@@ -84,7 +84,7 @@ describe('PositionsService', () => {
     } as unknown as AccessScopeService;
 
     const service = new PositionsService(prisma, accessScope);
-    const effectiveDate = '2026-09-01T00:00:00.000Z';
+    const effectiveDate = '2026-08-17T00:00:00.000Z';
 
     const result = await service.assignEmployee(actor, 'employee-1', {
       positionId: nextPosition.id,
