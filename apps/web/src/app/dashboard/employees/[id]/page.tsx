@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { StatusBadge } from '@/components/dashboard/StatusBadge';
+import { EmployeeEmploymentHistory } from '@/components/employees/EmployeeEmploymentHistory';
 import { EmployeeLifecycleActions } from '@/components/employees/EmployeeLifecycleActions';
 import { EmployeeReportingLines } from '@/components/employees/EmployeeReportingLines';
 import { api } from '@/lib/api';
@@ -223,6 +224,7 @@ export default function EmployeeProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -268,6 +270,7 @@ export default function EmployeeProfilePage() {
     setSuccess(message);
     setError('');
     await loadEmployeeProfile();
+    setHistoryRefreshKey((current) => current + 1);
   }
 
   async function downloadDocument(document: EmployeeDocument) {
@@ -435,6 +438,7 @@ export default function EmployeeProfilePage() {
         </section>
 
         <EmployeeReportingLines employeeId={employee.id} />
+        <EmployeeEmploymentHistory employeeId={employee.id} refreshKey={String(historyRefreshKey)} />
 
         <section className="grid gap-6 xl:grid-cols-[380px_1fr]">
           <aside className="space-y-6">
