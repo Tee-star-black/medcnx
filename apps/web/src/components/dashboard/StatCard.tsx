@@ -7,21 +7,29 @@ type StatCardProps = {
 
 export function StatCard({ title, value, description, icon }: StatCardProps) {
   return (
-    <div className="med-card group relative overflow-hidden p-5">
-      <span className="absolute left-0 top-0 h-full w-1 bg-[var(--accent)] transition-[width] group-hover:w-1.5" />
-      {icon ? (
-        <div className="mb-4 flex h-10 w-10 items-center justify-center border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)]">
-          {icon}
+    <div className="group relative min-h-44 border border-[var(--border-strong)] bg-[var(--surface)] p-5 transition hover:border-[var(--accent)] hover:shadow-[var(--shadow-sm)]">
+      <div className="absolute inset-x-0 top-0 h-[3px] bg-[var(--accent)]" />
+
+      <div className="flex items-start justify-between gap-4 pt-1">
+        <div className="min-w-0">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
+            {title}
+          </p>
+          <p className="mt-3 text-[2rem] font-black leading-none tracking-[-0.055em] text-[var(--text)] sm:text-[2.25rem]">
+            {value}
+          </p>
         </div>
-      ) : null}
 
-      <p className="text-xs font-extrabold uppercase tracking-[0.1em] text-[var(--text-soft)]">{title}</p>
+        {icon ? (
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-[var(--border-strong)] bg-[var(--surface-soft)] text-[var(--accent)] transition group-hover:border-[var(--accent)]">
+            {icon}
+          </div>
+        ) : null}
+      </div>
 
-      <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-[var(--text)]">
-        {value}
+      <p className="mt-5 border-t border-[var(--border)] pt-3 text-sm font-medium leading-6 text-[var(--muted)]">
+        {description}
       </p>
-
-      <p className="mt-2 text-sm font-medium leading-6 text-[var(--muted)]">{description}</p>
     </div>
   );
 }
