@@ -63,6 +63,8 @@ describe('employee position lifecycle integrity', () => {
 
     const transaction = {
       employeePositionAssignment: {
+        findFirst: jest.fn().mockResolvedValue(currentAssignment),
+        count: jest.fn().mockResolvedValue(2),
         update: jest.fn().mockResolvedValue({}),
         create: jest.fn().mockResolvedValue({
           ...currentAssignment,
@@ -70,21 +72,20 @@ describe('employee position lifecycle integrity', () => {
           positionId: destinationPosition.id,
         }),
       },
-      employee: { update: jest.fn().mockResolvedValue({}) },
-      auditLog: { create: jest.fn().mockResolvedValue({}) },
-    };
-
-    const prisma = {
-      employee: { findFirst: jest.fn().mockResolvedValue(employee) },
+      employee: {
+        findFirst: jest.fn().mockResolvedValue(employee),
+        update: jest.fn().mockResolvedValue({}),
+      },
       position: {
         findFirst: jest
           .fn()
           .mockResolvedValueOnce(destinationPosition)
           .mockResolvedValueOnce(previousPosition),
       },
-      employeePositionAssignment: {
-        findFirst: jest.fn().mockResolvedValue(currentAssignment),
-      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+
+    const prisma = {
       $transaction: jest.fn(async (callback: any) => callback(transaction)),
     } as unknown as PrismaService;
 
@@ -125,6 +126,9 @@ describe('employee position lifecycle integrity', () => {
             eventType: 'POSITION_CHANGED',
             previousDepartmentId: 'department-1',
             departmentId: 'department-2',
+            approvedHeadcount: 5,
+            currentHeadcountBefore: 2,
+            currentHeadcountAfter: 3,
           }),
         }),
       }),
