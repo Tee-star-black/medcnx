@@ -1,17 +1,50 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { AxiosError } from 'axios';
 import Link from 'next/link';
-import { CheckCircle2, ExternalLink, Loader2, Plus, Search, TriangleAlert, UserCheck, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  Plus,
+  Search,
+  UserCheck,
+} from 'lucide-react';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
+import { Button } from '@/components/ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
+import { FormField } from '@/components/ui/FormField';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { api } from '@/lib/api';
 
-type ApplicationStatus = 'APPLIED' | 'SCREENING' | 'INTERVIEW' | 'OFFER' | 'HIRED' | 'REJECTED' | 'WITHDRAWN';
+type ApplicationStatus =
+  | 'APPLIED'
+  | 'SCREENING'
+  | 'INTERVIEW'
+  | 'OFFER'
+  | 'HIRED'
+  | 'REJECTED'
+  | 'WITHDRAWN';
 type JobStatus = 'OPEN' | 'ON_HOLD' | 'CLOSED';
 
-type Candidate = { id: string; firstName: string; lastName: string; email?: string | null; phone?: string | null; currentRole?: string | null };
-type Job = { id: string; title: string; reference?: string | null; status: JobStatus; employmentType?: string | null };
+type Candidate = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  currentRole?: string | null;
+};
+type Job = {
+  id: string;
+  title: string;
+  reference?: string | null;
+  status: JobStatus;
+  employmentType?: string | null;
+};
 type Application = {
   id: string;
   jobId: string;
@@ -27,10 +60,19 @@ type Application = {
   candidate: Candidate;
   job: Job;
 };
-type HireResponse = { employee: { id: string; employeeNumber: string; firstName: string; lastName: string }; recruitmentJobClosed: boolean };
+type HireResponse = {
+  employee: {
+    id: string;
+    employeeNumber: string;
+    firstName: string;
+    lastName: string;
+  };
+  recruitmentJobClosed: boolean;
+};
 type ApiErrorPayload = { message?: string | string[] };
 
-const inputClass = 'h-11 w-full border border-black/10 bg-[#f8fafc] px-3 text-sm outline-none transition focus:border-black';
+const inputClass =
+  'h-11 w-full border border-[var(--border-strong)] bg-[var(--surface)] px-3 text-sm text-[var(--text)] outline-none transition focus:border-[var(--accent)]';
 
 function errorMessage(error: unknown, fallback: string) {
   const message = (error as AxiosError<ApiErrorPayload>).response?.data?.message;
@@ -39,15 +81,27 @@ function errorMessage(error: unknown, fallback: string) {
 
 function statusClass(status: ApplicationStatus) {
   const classes: Record<ApplicationStatus, string> = {
-    APPLIED: 'border-slate-200 bg-slate-50 text-slate-700',
-    SCREENING: 'border-blue-200 bg-blue-50 text-blue-700',
-    INTERVIEW: 'border-violet-200 bg-violet-50 text-violet-700',
-    OFFER: 'border-amber-200 bg-amber-50 text-amber-700',
-    HIRED: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    REJECTED: 'border-red-200 bg-red-50 text-red-700',
-    WITHDRAWN: 'border-gray-200 bg-gray-50 text-gray-500',
+    APPLIED: 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]',
+    SCREENING: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300',
+    INTERVIEW: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-300',
+    OFFER: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+    HIRED: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300',
+    REJECTED: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300',
+    WITHDRAWN: 'border-[var(--border)] bg-[var(--surface-soft)] text-[var(--muted)]',
   };
   return classes[status];
+}
+
+function formatStatus(status: ApplicationStatus) {
+  return status.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-ZA', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  }).format(new Date(value));
 }
 
 export default function RecruitmentApplicationsPage() {
@@ -61,9 +115,20 @@ export default function RecruitmentApplicationsPage() {
   const [success, setSuccess] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ jobId: '', candidateId: '', expectedSalary: '', rating: '', notes: '' });
+  const [createForm, setCreateForm] = useState({
+    jobId: '',
+    candidateId: '',
+    expectedSalary: '',
+    rating: '',
+    notes: '',
+  });
   const [hireTarget, setHireTarget] = useState<Application | null>(null);
-  const [hireForm, setHireForm] = useState({ employeeNumber: '', startDate: '', employmentType: '', reason: '' });
+  const [hireForm, setHireForm] = useState({
+    employeeNumber: '',
+    startDate: '',
+    employmentType: '',
+    reason: '',
+  });
   const [hiredEmployeeId, setHiredEmployeeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,11 +159,37 @@ export default function RecruitmentApplicationsPage() {
     return applications.filter((application) => {
       if (statusFilter !== 'ALL' && application.status !== statusFilter) return false;
       if (!search) return true;
-      return [application.candidate.firstName, application.candidate.lastName, application.candidate.email, application.job.title, application.job.reference]
+      return [
+        application.candidate.firstName,
+        application.candidate.lastName,
+        application.candidate.email,
+        application.job.title,
+        application.job.reference,
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(search));
     });
   }, [applications, query, statusFilter]);
+
+  const stageCounts = useMemo(
+    () =>
+      applications.reduce<Record<ApplicationStatus, number>>(
+        (counts, application) => {
+          counts[application.status] += 1;
+          return counts;
+        },
+        {
+          APPLIED: 0,
+          SCREENING: 0,
+          INTERVIEW: 0,
+          OFFER: 0,
+          HIRED: 0,
+          REJECTED: 0,
+          WITHDRAWN: 0,
+        },
+      ),
+    [applications],
+  );
 
   async function updateStatus(application: Application, status: ApplicationStatus) {
     setBusyId(application.id);
@@ -109,7 +200,9 @@ export default function RecruitmentApplicationsPage() {
       if (status === 'INTERVIEW') payload.interviewDate = new Date().toISOString();
       if (status === 'OFFER') payload.offerDate = new Date().toISOString();
       await api.patch(`/recruitment/applications/${application.id}/status`, payload);
-      setSuccess(`${application.candidate.firstName} ${application.candidate.lastName} moved to ${status.toLowerCase()}.`);
+      setSuccess(
+        `${application.candidate.firstName} ${application.candidate.lastName} moved to ${status.toLowerCase()}.`,
+      );
       await loadWorkspace();
     } catch (requestError: unknown) {
       setError(errorMessage(requestError, 'Could not update this application.'));
@@ -127,12 +220,20 @@ export default function RecruitmentApplicationsPage() {
       await api.post('/recruitment/applications', {
         jobId: createForm.jobId,
         candidateId: createForm.candidateId,
-        expectedSalary: createForm.expectedSalary ? Number(createForm.expectedSalary) : undefined,
+        expectedSalary: createForm.expectedSalary
+          ? Number(createForm.expectedSalary)
+          : undefined,
         rating: createForm.rating ? Number(createForm.rating) : undefined,
         notes: createForm.notes.trim() || undefined,
       });
       setCreateOpen(false);
-      setCreateForm({ jobId: '', candidateId: '', expectedSalary: '', rating: '', notes: '' });
+      setCreateForm({
+        jobId: '',
+        candidateId: '',
+        expectedSalary: '',
+        rating: '',
+        notes: '',
+      });
       setSuccess('Application added to the pipeline.');
       await loadWorkspace();
     } catch (requestError: unknown) {
@@ -145,7 +246,12 @@ export default function RecruitmentApplicationsPage() {
   function openHire(application: Application) {
     setHireTarget(application);
     setHiredEmployeeId(null);
-    setHireForm({ employeeNumber: '', startDate: new Date().toISOString().slice(0, 10), employmentType: application.job.employmentType ?? '', reason: 'Offer accepted.' });
+    setHireForm({
+      employeeNumber: '',
+      startDate: new Date().toISOString().slice(0, 10),
+      employmentType: application.job.employmentType ?? '',
+      reason: 'Offer accepted.',
+    });
   }
 
   async function hireCandidate(event: FormEvent<HTMLFormElement>) {
@@ -155,14 +261,19 @@ export default function RecruitmentApplicationsPage() {
     setError('');
     setSuccess('');
     try {
-      const response = await api.post<HireResponse>(`/recruitment/applications/${hireTarget.id}/hire`, {
-        employeeNumber: hireForm.employeeNumber.trim(),
-        startDate: hireForm.startDate,
-        employmentType: hireForm.employmentType.trim() || undefined,
-        reason: hireForm.reason.trim() || undefined,
-      });
+      const response = await api.post<HireResponse>(
+        `/recruitment/applications/${hireTarget.id}/hire`,
+        {
+          employeeNumber: hireForm.employeeNumber.trim(),
+          startDate: hireForm.startDate,
+          employmentType: hireForm.employmentType.trim() || undefined,
+          reason: hireForm.reason.trim() || undefined,
+        },
+      );
       setHiredEmployeeId(response.data.employee.id);
-      setSuccess(`${response.data.employee.firstName} ${response.data.employee.lastName} is now an employee${response.data.recruitmentJobClosed ? '; the recruitment job was also closed.' : '.'}`);
+      setSuccess(
+        `${response.data.employee.firstName} ${response.data.employee.lastName} is now an employee${response.data.recruitmentJobClosed ? '; the recruitment job was also closed.' : '.'}`,
+      );
       await loadWorkspace();
     } catch (requestError: unknown) {
       setError(errorMessage(requestError, 'Could not hire this candidate.'));
@@ -171,38 +282,179 @@ export default function RecruitmentApplicationsPage() {
     }
   }
 
+  function closeCreateDrawer() {
+    if (busyId === 'create') return;
+    setCreateOpen(false);
+  }
+
+  function closeHireDrawer() {
+    if (hireTarget && busyId === hireTarget.id) return;
+    setHireTarget(null);
+  }
+
   return (
     <DashboardShell activePage="recruitment">
-      <div className="space-y-7">
-        <section className="flex flex-col gap-5 border-b border-black/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="mb-2 text-sm uppercase tracking-[0.25em] text-gray-400">Recruitment</p>
-            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-[#111827]">Applications pipeline</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">Move candidates through screening, interview and offer. Hiring is a controlled conversion that creates the employee record and position assignment.</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/dashboard/recruitment/candidates" className="border border-black/10 bg-white px-4 py-3 text-sm font-medium text-gray-600 hover:border-black hover:text-black">Candidates</Link>
-            <button type="button" onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 border border-black bg-black px-4 py-3 text-sm font-medium text-white hover:bg-white hover:text-black"><Plus size={16} />Add application</button>
-          </div>
+      <div className="space-y-6">
+        <PageHeader
+          category="Recruitment operations"
+          title="Applications pipeline"
+          description="Move candidates through screening, interview and offer. Hiring remains a controlled conversion that creates the employee record and position assignment."
+          primaryAction={{
+            label: 'Add application',
+            onClick: () => setCreateOpen(true),
+            icon: <Plus size={16} />,
+          }}
+          secondaryAction={{
+            label: 'Candidates',
+            href: '/dashboard/recruitment/candidates',
+          }}
+        />
+
+        {error ? (
+          <FeedbackBanner tone="error" title="Pipeline operation failed" message={error} />
+        ) : null}
+        {success ? (
+          <FeedbackBanner tone="success" title="Pipeline updated" message={success} />
+        ) : null}
+
+        <section className="grid gap-0 border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xs)] sm:grid-cols-2 xl:grid-cols-5">
+          <StageMetric label="Applied" value={stageCounts.APPLIED} />
+          <StageMetric label="Screening" value={stageCounts.SCREENING} />
+          <StageMetric label="Interview" value={stageCounts.INTERVIEW} />
+          <StageMetric label="Offer" value={stageCounts.OFFER} />
+          <StageMetric label="Hired" value={stageCounts.HIRED} />
         </section>
 
-        {error ? <div className="flex gap-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><TriangleAlert size={17} />{error}</div> : null}
-        {success ? <div className="flex gap-3 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><CheckCircle2 size={17} />{success}</div> : null}
-
-        <section className="border border-black/10 bg-white">
-          <div className="grid gap-4 border-b border-black/10 p-5 md:grid-cols-[1fr_220px]">
-            <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input className={`${inputClass} pl-10`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search candidate or job..." /></div>
-            <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as ApplicationStatus | 'ALL')}><option value="ALL">All stages</option>{(['APPLIED','SCREENING','INTERVIEW','OFFER','HIRED','REJECTED','WITHDRAWN'] as ApplicationStatus[]).map((status) => <option key={status} value={status}>{status}</option>)}</select>
+        <section className="border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xs)]">
+          <div className="grid gap-4 border-b border-[var(--border)] bg-[var(--surface-soft)] p-5 md:grid-cols-[1fr_220px] sm:p-6">
+            <label className="flex min-h-11 items-center gap-2 border border-[var(--border-strong)] bg-[var(--surface)] px-3 focus-within:border-[var(--accent)]">
+              <Search size={16} className="shrink-0 text-[var(--muted)]" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search candidate or job"
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+              />
+            </label>
+            <select
+              className={inputClass}
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as ApplicationStatus | 'ALL')
+              }
+            >
+              <option value="ALL">All stages</option>
+              {(
+                [
+                  'APPLIED',
+                  'SCREENING',
+                  'INTERVIEW',
+                  'OFFER',
+                  'HIRED',
+                  'REJECTED',
+                  'WITHDRAWN',
+                ] as ApplicationStatus[]
+              ).map((status) => (
+                <option key={status} value={status}>
+                  {formatStatus(status)}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {loading ? <div className="flex min-h-80 items-center justify-center gap-3 text-sm text-gray-500"><Loader2 size={18} className="animate-spin" />Loading applications...</div> : !filtered.length ? <div className="px-6 py-16 text-center text-sm text-gray-500">No applications match this view.</div> : (
-            <div className="divide-y divide-black/10">
+          {loading ? (
+            <div className="flex min-h-80 items-center justify-center gap-3 text-sm font-medium text-[var(--muted)]">
+              <Loader2 size={18} className="animate-spin text-[var(--accent)]" />
+              Loading applications...
+            </div>
+          ) : !filtered.length ? (
+            <div className="p-5 sm:p-6">
+              <EmptyState
+                title="No applications match this view"
+                description="Adjust the search or stage filter, or add a new application to the recruitment pipeline."
+                action={
+                  query || statusFilter !== 'ALL' ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setQuery('');
+                        setStatusFilter('ALL');
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      icon={<Plus size={15} />}
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      Add application
+                    </Button>
+                  )
+                }
+              />
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--border)]">
               {filtered.map((application) => (
-                <article key={application.id} className="grid gap-5 p-5 xl:grid-cols-[1.3fr_1fr_150px_300px] xl:items-center">
-                  <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#111827]">{application.candidate.firstName} {application.candidate.lastName}</h3><span className={`border px-2 py-1 text-[11px] font-semibold ${statusClass(application.status)}`}>{application.status}</span></div><p className="mt-1 text-sm text-gray-500">{application.candidate.currentRole || application.candidate.email || 'Candidate profile'}</p></div>
-                  <div><p className="text-sm font-medium text-[#111827]">{application.job.title}</p><p className="mt-1 text-xs text-gray-400">{application.job.reference || 'No reference'} · Job {application.job.status}</p></div>
-                  <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Applied</p><p className="mt-1 text-sm text-gray-600">{new Date(application.appliedAt).toLocaleDateString()}</p></div>
-                  <div className="flex flex-wrap gap-2 xl:justify-end"><StageActions application={application} busy={busyId === application.id} updateStatus={updateStatus} openHire={openHire} /></div>
+                <article
+                  key={application.id}
+                  className="grid gap-5 px-5 py-5 transition hover:bg-[var(--surface-soft)] sm:px-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)_140px_minmax(260px,auto)] xl:items-center"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-[var(--accent)] bg-[var(--accent)] text-xs font-black text-[var(--accent-text)]">
+                        {application.candidate.firstName.charAt(0)}
+                        {application.candidate.lastName.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate font-black text-[var(--text)]">
+                          {application.candidate.firstName} {application.candidate.lastName}
+                        </h3>
+                        <p className="mt-1 truncate text-sm font-medium text-[var(--muted)]">
+                          {application.candidate.currentRole ||
+                            application.candidate.email ||
+                            'Candidate profile'}
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`mt-3 inline-flex border px-2 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] ${statusClass(application.status)}`}
+                    >
+                      {formatStatus(application.status)}
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
+                      Vacancy
+                    </p>
+                    <p className="mt-1 text-sm font-black text-[var(--text)]">
+                      {application.job.title}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-[var(--muted)]">
+                      {application.job.reference || 'No reference'} · Job {application.job.status}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
+                      Applied
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[var(--text)]">
+                      {formatDate(application.appliedAt)}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 xl:justify-end">
+                    <StageActions
+                      application={application}
+                      busy={busyId === application.id}
+                      updateStatus={updateStatus}
+                      openHire={openHire}
+                    />
+                  </div>
                 </article>
               ))}
             </div>
@@ -210,47 +462,315 @@ export default function RecruitmentApplicationsPage() {
         </section>
       </div>
 
-      {createOpen ? (
-        <Drawer title="Add application" close={() => setCreateOpen(false)}>
-          <form onSubmit={createApplication} className="space-y-4">
-            <Field label="Candidate"><select required className={inputClass} value={createForm.candidateId} onChange={(event) => setCreateForm((current) => ({ ...current, candidateId: event.target.value }))}><option value="">Select candidate</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.firstName} {candidate.lastName}</option>)}</select></Field>
-            <Field label="Open job"><select required className={inputClass} value={createForm.jobId} onChange={(event) => setCreateForm((current) => ({ ...current, jobId: event.target.value }))}><option value="">Select job</option>{jobs.filter((job) => job.status === 'OPEN').map((job) => <option key={job.id} value={job.id}>{job.title}{job.reference ? ` (${job.reference})` : ''}</option>)}</select></Field>
-            <div className="grid gap-4 sm:grid-cols-2"><Field label="Expected salary"><input type="number" min={0} className={inputClass} value={createForm.expectedSalary} onChange={(event) => setCreateForm((current) => ({ ...current, expectedSalary: event.target.value }))} /></Field><Field label="Rating"><select className={inputClass} value={createForm.rating} onChange={(event) => setCreateForm((current) => ({ ...current, rating: event.target.value }))}><option value="">Not rated</option>{[1,2,3,4,5].map((rating) => <option key={rating} value={rating}>{rating}/5</option>)}</select></Field></div>
-            <Field label="Notes"><textarea rows={5} maxLength={2000} className={`${inputClass} h-auto min-h-28 py-3`} value={createForm.notes} onChange={(event) => setCreateForm((current) => ({ ...current, notes: event.target.value }))} /></Field>
-            <Actions busy={busyId === 'create'} submitLabel="Add application" cancel={() => setCreateOpen(false)} />
-          </form>
-        </Drawer>
-      ) : null}
+      <Drawer
+        open={createOpen}
+        title="Add application"
+        description="Assign an existing candidate to an open recruitment job."
+        onClose={closeCreateDrawer}
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="secondary" disabled={busyId === 'create'} onClick={closeCreateDrawer}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="create-application-form"
+              variant="primary"
+              loading={busyId === 'create'}
+              icon={<CheckCircle2 size={16} />}
+            >
+              Add application
+            </Button>
+          </div>
+        }
+      >
+        <form id="create-application-form" onSubmit={createApplication} className="space-y-5">
+          <FormField label="Candidate" htmlFor="application-candidate">
+            <select
+              id="application-candidate"
+              required
+              className={inputClass}
+              value={createForm.candidateId}
+              onChange={(event) =>
+                setCreateForm((current) => ({
+                  ...current,
+                  candidateId: event.target.value,
+                }))
+              }
+            >
+              <option value="">Select candidate</option>
+              {candidates.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.firstName} {candidate.lastName}
+                </option>
+              ))}
+            </select>
+          </FormField>
 
-      {hireTarget ? (
-        <Drawer title="Hire candidate" close={() => setHireTarget(null)}>
-          {hiredEmployeeId ? <div className="space-y-4"><div className="border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">The candidate has been converted to an employee.</div><Link href={`/dashboard/employees/${hiredEmployeeId}`} className="inline-flex items-center gap-2 border border-black bg-black px-5 py-3 text-sm font-medium text-white"><ExternalLink size={15} />View employee</Link></div> : (
-            <form onSubmit={hireCandidate} className="space-y-4">
-              <div className="border border-black/10 bg-[#f8fafc] p-4"><p className="font-semibold">{hireTarget.candidate.firstName} {hireTarget.candidate.lastName}</p><p className="mt-1 text-sm text-gray-500">{hireTarget.job.title}{hireTarget.job.reference ? ` · ${hireTarget.job.reference}` : ''}</p></div>
-              <Field label="Employee number"><input required maxLength={80} className={inputClass} value={hireForm.employeeNumber} onChange={(event) => setHireForm((current) => ({ ...current, employeeNumber: event.target.value }))} /></Field>
-              <Field label="Start date"><input required type="date" className={inputClass} value={hireForm.startDate} onChange={(event) => setHireForm((current) => ({ ...current, startDate: event.target.value }))} /></Field>
-              <Field label="Employment type"><input maxLength={100} className={inputClass} value={hireForm.employmentType} onChange={(event) => setHireForm((current) => ({ ...current, employmentType: event.target.value }))} /></Field>
-              <Field label="Reason / notes"><textarea rows={4} maxLength={500} className={`${inputClass} h-auto min-h-24 py-3`} value={hireForm.reason} onChange={(event) => setHireForm((current) => ({ ...current, reason: event.target.value }))} /></Field>
-              <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">Hiring creates an Employee record and, when the job is linked to an approved position, an active position assignment. This is not a reversible status-only action.</div>
-              <Actions busy={busyId === hireTarget.id} submitLabel="Hire candidate" cancel={() => setHireTarget(null)} icon={<UserCheck size={16} />} />
+          <FormField label="Open job" htmlFor="application-job">
+            <select
+              id="application-job"
+              required
+              className={inputClass}
+              value={createForm.jobId}
+              onChange={(event) =>
+                setCreateForm((current) => ({ ...current, jobId: event.target.value }))
+              }
+            >
+              <option value="">Select job</option>
+              {jobs
+                .filter((job) => job.status === 'OPEN')
+                .map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.title}
+                    {job.reference ? ` (${job.reference})` : ''}
+                  </option>
+                ))}
+            </select>
+          </FormField>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Expected salary" htmlFor="application-salary">
+              <input
+                id="application-salary"
+                type="number"
+                min={0}
+                className={inputClass}
+                value={createForm.expectedSalary}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    expectedSalary: event.target.value,
+                  }))
+                }
+              />
+            </FormField>
+            <FormField label="Rating" htmlFor="application-rating">
+              <select
+                id="application-rating"
+                className={inputClass}
+                value={createForm.rating}
+                onChange={(event) =>
+                  setCreateForm((current) => ({ ...current, rating: event.target.value }))
+                }
+              >
+                <option value="">Not rated</option>
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <option key={rating} value={rating}>
+                    {rating}/5
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <FormField label="Notes" htmlFor="application-notes">
+            <textarea
+              id="application-notes"
+              rows={5}
+              maxLength={2000}
+              className={`${inputClass} h-auto min-h-28 py-3`}
+              value={createForm.notes}
+              onChange={(event) =>
+                setCreateForm((current) => ({ ...current, notes: event.target.value }))
+              }
+            />
+          </FormField>
+        </form>
+      </Drawer>
+
+      <Drawer
+        open={Boolean(hireTarget)}
+        title="Hire candidate"
+        description="Convert the accepted offer into an employee record and position assignment."
+        onClose={closeHireDrawer}
+        footer={
+          hireTarget && !hiredEmployeeId ? (
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="secondary" disabled={busyId === hireTarget.id} onClick={closeHireDrawer}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="hire-candidate-form"
+                variant="primary"
+                loading={busyId === hireTarget.id}
+                icon={<UserCheck size={16} />}
+              >
+                Hire candidate
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {hireTarget ? (
+          hiredEmployeeId ? (
+            <div className="space-y-5">
+              <FeedbackBanner
+                tone="success"
+                title="Employee created"
+                message="The candidate has been converted to an employee through the recruitment hiring workflow."
+              />
+              <Link
+                href={`/dashboard/employees/${hiredEmployeeId}`}
+                className="inline-flex min-h-11 items-center justify-center gap-2 border border-[var(--accent)] bg-[var(--accent)] px-5 text-sm font-extrabold text-[var(--accent-text)] hover:bg-[var(--accent-hover)]"
+              >
+                <ExternalLink size={15} />
+                View employee
+              </Link>
+            </div>
+          ) : (
+            <form id="hire-candidate-form" onSubmit={hireCandidate} className="space-y-5">
+              <div className="border border-[var(--border-strong)] bg-[var(--surface-soft)] p-4">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                  Accepted candidate
+                </p>
+                <p className="mt-2 font-black text-[var(--text)]">
+                  {hireTarget.candidate.firstName} {hireTarget.candidate.lastName}
+                </p>
+                <p className="mt-1 text-sm font-medium text-[var(--muted)]">
+                  {hireTarget.job.title}
+                  {hireTarget.job.reference ? ` · ${hireTarget.job.reference}` : ''}
+                </p>
+              </div>
+
+              <FormField label="Employee number" htmlFor="hire-employee-number">
+                <input
+                  id="hire-employee-number"
+                  required
+                  maxLength={80}
+                  className={inputClass}
+                  value={hireForm.employeeNumber}
+                  onChange={(event) =>
+                    setHireForm((current) => ({
+                      ...current,
+                      employeeNumber: event.target.value,
+                    }))
+                  }
+                />
+              </FormField>
+
+              <FormField label="Start date" htmlFor="hire-start-date">
+                <input
+                  id="hire-start-date"
+                  required
+                  type="date"
+                  className={inputClass}
+                  value={hireForm.startDate}
+                  onChange={(event) =>
+                    setHireForm((current) => ({ ...current, startDate: event.target.value }))
+                  }
+                />
+              </FormField>
+
+              <FormField label="Employment type" htmlFor="hire-employment-type">
+                <input
+                  id="hire-employment-type"
+                  maxLength={100}
+                  className={inputClass}
+                  value={hireForm.employmentType}
+                  onChange={(event) =>
+                    setHireForm((current) => ({
+                      ...current,
+                      employmentType: event.target.value,
+                    }))
+                  }
+                />
+              </FormField>
+
+              <FormField label="Reason / notes" htmlFor="hire-reason">
+                <textarea
+                  id="hire-reason"
+                  rows={4}
+                  maxLength={500}
+                  className={`${inputClass} h-auto min-h-24 py-3`}
+                  value={hireForm.reason}
+                  onChange={(event) =>
+                    setHireForm((current) => ({ ...current, reason: event.target.value }))
+                  }
+                />
+              </FormField>
+
+              <FeedbackBanner
+                tone="warning"
+                title="Controlled conversion"
+                message="Hiring creates an Employee record and, when the job is linked to an approved position, an active position assignment. This is not a reversible status-only action."
+              />
             </form>
-          )}
-        </Drawer>
-      ) : null}
+          )
+        ) : null}
+      </Drawer>
     </DashboardShell>
   );
 }
 
-function StageActions({ application, busy, updateStatus, openHire }: { application: Application; busy: boolean; updateStatus: (application: Application, status: ApplicationStatus) => Promise<void>; openHire: (application: Application) => void }) {
-  if (application.status === 'HIRED') return <span className="text-sm font-medium text-emerald-700">Employee created</span>;
-  if (application.status === 'REJECTED' || application.status === 'WITHDRAWN') return <span className="text-sm text-gray-400">Read only</span>;
-  const buttonClass = 'border border-black/10 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:border-black hover:text-black disabled:opacity-50';
-  return <>{application.status === 'APPLIED' ? <button disabled={busy} onClick={() => void updateStatus(application, 'SCREENING')} className={buttonClass}>Start screening</button> : null}{application.status === 'SCREENING' ? <button disabled={busy} onClick={() => void updateStatus(application, 'INTERVIEW')} className={buttonClass}>Move to interview</button> : null}{application.status === 'INTERVIEW' ? <button disabled={busy} onClick={() => void updateStatus(application, 'OFFER')} className={buttonClass}>Move to offer</button> : null}{application.status === 'OFFER' && application.job.status === 'OPEN' ? <button disabled={busy} onClick={() => openHire(application)} className="border border-emerald-700 bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">Hire candidate</button> : null}{['APPLIED','SCREENING','INTERVIEW','OFFER'].includes(application.status) ? <button disabled={busy} onClick={() => void updateStatus(application, 'REJECTED')} className="border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50">Reject</button> : null}</>;
+function StageMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="border-b border-[var(--border)] p-4 last:border-b-0 sm:border-r sm:last:border-r-0 xl:border-b-0">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black tracking-[-0.04em] text-[var(--text)]">
+        {value}
+      </p>
+    </div>
+  );
 }
 
-function Drawer({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
-  return <div className="fixed inset-0 z-[80] flex justify-end bg-black/35" onMouseDown={close}><aside role="dialog" aria-modal="true" className="h-full w-full max-w-xl overflow-y-auto bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-white px-6 py-5"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Recruitment</p><h2 className="mt-1 text-xl font-semibold">{title}</h2></div><button type="button" onClick={close} className="flex h-9 w-9 items-center justify-center border border-black/10"><X size={17} /></button></div><div className="p-6">{children}</div></aside></div>;
-}
+function StageActions({
+  application,
+  busy,
+  updateStatus,
+  openHire,
+}: {
+  application: Application;
+  busy: boolean;
+  updateStatus: (application: Application, status: ApplicationStatus) => Promise<void>;
+  openHire: (application: Application) => void;
+}) {
+  if (application.status === 'HIRED') {
+    return <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Employee created</span>;
+  }
+  if (application.status === 'REJECTED' || application.status === 'WITHDRAWN') {
+    return <span className="text-sm font-medium text-[var(--muted)]">Read only</span>;
+  }
 
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block"><span className="mb-2 block text-sm font-medium text-[#111827]">{label}</span>{children}</label>; }
-function Actions({ busy, submitLabel, cancel, icon }: { busy: boolean; submitLabel: string; cancel: () => void; icon?: ReactNode }) { return <div className="flex justify-end gap-3 border-t border-black/10 pt-5"><button type="button" onClick={cancel} disabled={busy} className="border border-black/10 px-5 py-3 text-sm font-medium disabled:opacity-50">Cancel</button><button type="submit" disabled={busy} className="inline-flex items-center gap-2 border border-black bg-black px-5 py-3 text-sm font-medium text-white disabled:opacity-50">{busy ? <Loader2 size={16} className="animate-spin" /> : icon || <CheckCircle2 size={16} />}{submitLabel}</button></div>; }
+  return (
+    <>
+      {application.status === 'APPLIED' ? (
+        <Button disabled={busy} onClick={() => void updateStatus(application, 'SCREENING')}>
+          Start screening
+        </Button>
+      ) : null}
+      {application.status === 'SCREENING' ? (
+        <Button disabled={busy} onClick={() => void updateStatus(application, 'INTERVIEW')}>
+          Move to interview
+        </Button>
+      ) : null}
+      {application.status === 'INTERVIEW' ? (
+        <Button disabled={busy} onClick={() => void updateStatus(application, 'OFFER')}>
+          Move to offer
+        </Button>
+      ) : null}
+      {application.status === 'OFFER' && application.job.status === 'OPEN' ? (
+        <Button
+          variant="primary"
+          disabled={busy}
+          icon={<UserCheck size={15} />}
+          onClick={() => openHire(application)}
+        >
+          Hire candidate
+        </Button>
+      ) : null}
+      {['APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER'].includes(application.status) ? (
+        <Button
+          variant="danger"
+          disabled={busy}
+          onClick={() => void updateStatus(application, 'REJECTED')}
+        >
+          Reject
+        </Button>
+      ) : null}
+    </>
+  );
+}
