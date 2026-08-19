@@ -20,7 +20,7 @@ describe('RecruitmentHiringService guardrails', () => {
 
   const dto = {
     employeeNumber: 'MED-200',
-    startDate: '2026-09-01',
+    startDate: '2026-08-01',
   };
 
   function prismaWithApplication(application: any) {
