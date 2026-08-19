@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './clinical-system.css';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 export const metadata: Metadata = {
