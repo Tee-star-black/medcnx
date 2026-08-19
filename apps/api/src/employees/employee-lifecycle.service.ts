@@ -170,12 +170,18 @@ export class EmployeeLifecycleService {
         where: {
           id: nextManagerId,
           organisationId: user.organisationId,
-          employmentStatus: { notIn: [EmploymentStatus.TERMINATED, EmploymentStatus.RESIGNED] },
+          employmentStatus: {
+            notIn: [EmploymentStatus.TERMINATED, EmploymentStatus.RESIGNED],
+          },
         },
         select: { id: true, firstName: true, lastName: true },
       });
       if (!manager) throw new NotFoundException('Manager not found or inactive.');
-      await this.assertNoManagerCycle(user.organisationId, employee.id, manager.id);
+      await this.assertNoManagerCycle(
+        user.organisationId,
+        employee.id,
+        manager.id,
+      );
       managerName = `${manager.firstName} ${manager.lastName}`;
     }
 
@@ -201,7 +207,9 @@ export class EmployeeLifecycleService {
     const nextEmploymentType = dto.employmentType.trim();
 
     if (employee.employmentType === nextEmploymentType) {
-      throw new BadRequestException('Employee already has this employment type.');
+      throw new BadRequestException(
+        'Employee already has this employment type.',
+      );
     }
 
     return this.applyEmploymentChange(user, employee, {
@@ -233,7 +241,8 @@ export class EmployeeLifecycleService {
         EmploymentStatus.ON_LEAVE,
         EmploymentStatus.SUSPENDED,
       ],
-      message: 'Employee terminated successfully. Historical records were preserved.',
+      message:
+        'Employee terminated successfully. Historical records were preserved.',
     });
   }
 
@@ -307,35 +316,50 @@ export class EmployeeLifecycleService {
     const effectiveDate = this.parseEffectiveDate(options.effectiveDate);
     const reason = options.reason.trim();
     const previous = this.snapshot(employee);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
 
-    const updatedEmployee = await this.prisma.$transaction(async (transaction) => {
-      const updated = await transaction.employee.update({
-        where: { id: employee.id },
-        data: options.data,
-      });
+    if (effectiveDate > endOfToday) {
+      throw new BadRequestException(
+        'Employment change effective date cannot be in the future until scheduled employment changes are supported.',
+      );
+    }
+    if (employee.startDate && effectiveDate < employee.startDate) {
+      throw new BadRequestException(
+        'Employment change effective date cannot precede the employee start date.',
+      );
+    }
 
-      await transaction.auditLog.create({
-        data: {
-          organisationId: user.organisationId,
-          actorUserId: user.id,
-          employeeId: employee.id,
-          action: AuditAction.UPDATE,
-          entity: 'EmployeeLifecycle',
-          entityId: employee.id,
-          message: options.message,
-          metadata: {
-            eventType: options.eventType,
-            reason,
-            effectiveDate: effectiveDate.toISOString(),
-            previous,
-            next: options.nextSnapshot,
-            ...options.metadata,
+    const updatedEmployee = await this.prisma.$transaction(
+      async (transaction) => {
+        const updated = await transaction.employee.update({
+          where: { id: employee.id },
+          data: options.data,
+        });
+
+        await transaction.auditLog.create({
+          data: {
+            organisationId: user.organisationId,
+            actorUserId: user.id,
+            employeeId: employee.id,
+            action: AuditAction.UPDATE,
+            entity: 'EmployeeLifecycle',
+            entityId: employee.id,
+            message: options.message,
+            metadata: {
+              eventType: options.eventType,
+              reason,
+              effectiveDate: effectiveDate.toISOString(),
+              previous,
+              next: options.nextSnapshot,
+              ...options.metadata,
+            },
           },
-        },
-      });
+        });
 
-      return updated;
-    });
+        return updated;
+      },
+    );
 
     return { message: options.message, employee: updatedEmployee };
   }
@@ -398,32 +422,35 @@ export class EmployeeLifecycleService {
       };
 
       if (options.closeEmploymentStructure) {
-        const [activePositionAssignments, activeManagerAssignments, directReports] =
-          await Promise.all([
-            transaction.employeePositionAssignment.findMany({
-              where: {
-                organisationId: user.organisationId,
-                employeeId: employee.id,
-                effectiveTo: null,
-              },
-              select: { id: true, effectiveFrom: true },
-            }),
-            transaction.employeeManagerAssignment.findMany({
-              where: {
-                organisationId: user.organisationId,
-                employeeId: employee.id,
-                effectiveTo: null,
-              },
-              select: { id: true, effectiveFrom: true },
-            }),
-            transaction.employee.findMany({
-              where: {
-                organisationId: user.organisationId,
-                managerId: employee.id,
-              },
-              select: { id: true },
-            }),
-          ]);
+        const [
+          activePositionAssignments,
+          activeManagerAssignments,
+          directReports,
+        ] = await Promise.all([
+          transaction.employeePositionAssignment.findMany({
+            where: {
+              organisationId: user.organisationId,
+              employeeId: employee.id,
+              effectiveTo: null,
+            },
+            select: { id: true, effectiveFrom: true },
+          }),
+          transaction.employeeManagerAssignment.findMany({
+            where: {
+              organisationId: user.organisationId,
+              employeeId: employee.id,
+              effectiveTo: null,
+            },
+            select: { id: true, effectiveFrom: true },
+          }),
+          transaction.employee.findMany({
+            where: {
+              organisationId: user.organisationId,
+              managerId: employee.id,
+            },
+            select: { id: true },
+          }),
+        ]);
 
         if (
           activePositionAssignments.some(
@@ -468,34 +495,47 @@ export class EmployeeLifecycleService {
         }
 
         if (activePositionAssignments.length) {
-          const closed = await transaction.employeePositionAssignment.updateMany({
-            where: {
-              id: { in: activePositionAssignments.map((assignment) => assignment.id) },
-            },
-            data: { effectiveTo: effectiveDate },
-          });
+          const closed =
+            await transaction.employeePositionAssignment.updateMany({
+              where: {
+                id: {
+                  in: activePositionAssignments.map(
+                    (assignment) => assignment.id,
+                  ),
+                },
+              },
+              data: { effectiveTo: effectiveDate },
+            });
           structureCleanup.closedPositionAssignments = closed.count;
         }
 
         if (activeManagerAssignments.length) {
-          const closed = await transaction.employeeManagerAssignment.updateMany({
-            where: {
-              id: { in: activeManagerAssignments.map((assignment) => assignment.id) },
-            },
-            data: { effectiveTo: effectiveDate },
-          });
+          const closed =
+            await transaction.employeeManagerAssignment.updateMany({
+              where: {
+                id: {
+                  in: activeManagerAssignments.map(
+                    (assignment) => assignment.id,
+                  ),
+                },
+              },
+              data: { effectiveTo: effectiveDate },
+            });
           structureCleanup.closedEmployeeManagerAssignments = closed.count;
         }
 
         if (directReportManagerAssignments.length) {
-          const closed = await transaction.employeeManagerAssignment.updateMany({
-            where: {
-              id: {
-                in: directReportManagerAssignments.map((assignment) => assignment.id),
+          const closed =
+            await transaction.employeeManagerAssignment.updateMany({
+              where: {
+                id: {
+                  in: directReportManagerAssignments.map(
+                    (assignment) => assignment.id,
+                  ),
+                },
               },
-            },
-            data: { effectiveTo: effectiveDate },
-          });
+              data: { effectiveTo: effectiveDate },
+            });
           structureCleanup.closedDirectReportManagerAssignments = closed.count;
         }
 
@@ -525,17 +565,26 @@ export class EmployeeLifecycleService {
       if (employee.userId) {
         if (options.disableLinkedUser) {
           await transaction.user.updateMany({
-            where: { id: employee.userId, organisationId: user.organisationId },
+            where: {
+              id: employee.userId,
+              organisationId: user.organisationId,
+            },
             data: { status: UserStatus.DISABLED },
           });
         } else if (options.suspendLinkedUser) {
           await transaction.user.updateMany({
-            where: { id: employee.userId, organisationId: user.organisationId },
+            where: {
+              id: employee.userId,
+              organisationId: user.organisationId,
+            },
             data: { status: UserStatus.SUSPENDED },
           });
         } else if (options.reactivateLinkedUser) {
           await transaction.user.updateMany({
-            where: { id: employee.userId, organisationId: user.organisationId },
+            where: {
+              id: employee.userId,
+              organisationId: user.organisationId,
+            },
             data: { status: UserStatus.ACTIVE },
           });
         }
@@ -590,7 +639,9 @@ export class EmployeeLifecycleService {
       employee.employmentStatus === EmploymentStatus.TERMINATED ||
       employee.employmentStatus === EmploymentStatus.RESIGNED
     ) {
-      throw new BadRequestException('Inactive employees cannot receive employment changes.');
+      throw new BadRequestException(
+        'Inactive employees cannot receive employment changes.',
+      );
     }
     return employee;
   }
@@ -605,10 +656,14 @@ export class EmployeeLifecycleService {
 
     while (currentManagerId) {
       if (currentManagerId === employeeId) {
-        throw new BadRequestException('Manager assignment would create a reporting cycle.');
+        throw new BadRequestException(
+          'Manager assignment would create a reporting cycle.',
+        );
       }
       if (visited.has(currentManagerId)) {
-        throw new BadRequestException('Existing manager hierarchy contains a reporting cycle.');
+        throw new BadRequestException(
+          'Existing manager hierarchy contains a reporting cycle.',
+        );
       }
       visited.add(currentManagerId);
 
@@ -660,7 +715,9 @@ export class EmployeeLifecycleService {
   private parseEffectiveDate(value: string) {
     const effectiveDate = new Date(value);
     if (Number.isNaN(effectiveDate.getTime())) {
-      throw new BadRequestException('A valid lifecycle effective date is required.');
+      throw new BadRequestException(
+        'A valid lifecycle effective date is required.',
+      );
     }
     return effectiveDate;
   }
