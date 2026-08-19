@@ -29,6 +29,7 @@ type EmployeeLifecycleRecord = {
   jobTitle: string | null;
   employmentType: string | null;
   employmentStatus: EmploymentStatus;
+  startDate: Date | null;
   endDate: Date | null;
 };
 
@@ -226,6 +227,7 @@ export class EmployeeLifecycleService {
       nextStatus: EmploymentStatus.TERMINATED,
       disableLinkedUser: true,
       setEndDate: true,
+      closeEmploymentStructure: true,
       allowedFrom: [
         EmploymentStatus.ACTIVE,
         EmploymentStatus.ON_LEAVE,
@@ -245,6 +247,7 @@ export class EmployeeLifecycleService {
       nextStatus: EmploymentStatus.RESIGNED,
       disableLinkedUser: true,
       setEndDate: true,
+      closeEmploymentStructure: true,
       allowedFrom: [
         EmploymentStatus.ACTIVE,
         EmploymentStatus.ON_LEAVE,
@@ -351,6 +354,7 @@ export class EmployeeLifecycleService {
       reactivateLinkedUser?: boolean;
       setEndDate?: boolean;
       clearEndDate?: boolean;
+      closeEmploymentStructure?: boolean;
     },
   ) {
     const employee = await this.getEmployee(user, employeeId);
@@ -363,16 +367,158 @@ export class EmployeeLifecycleService {
       );
     }
 
-    const previous = this.snapshot(employee);
-    const next = { ...previous, employmentStatus: options.nextStatus };
+    if (options.setEndDate) {
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      if (effectiveDate > endOfToday) {
+        throw new BadRequestException(
+          'Employment end date cannot be in the future until scheduled lifecycle changes are supported.',
+        );
+      }
+      if (employee.startDate && effectiveDate < employee.startDate) {
+        throw new BadRequestException(
+          'Employment end date cannot precede the employee start date.',
+        );
+      }
+    }
 
-    const updatedEmployee = await this.prisma.$transaction(async (transaction) => {
+    const previous = this.snapshot(employee);
+    const next = {
+      ...previous,
+      employmentStatus: options.nextStatus,
+      ...(options.closeEmploymentStructure ? { managerId: null } : {}),
+    };
+
+    const result = await this.prisma.$transaction(async (transaction) => {
+      const structureCleanup = {
+        closedPositionAssignments: 0,
+        closedEmployeeManagerAssignments: 0,
+        detachedDirectReports: 0,
+        closedDirectReportManagerAssignments: 0,
+      };
+
+      if (options.closeEmploymentStructure) {
+        const [activePositionAssignments, activeManagerAssignments, directReports] =
+          await Promise.all([
+            transaction.employeePositionAssignment.findMany({
+              where: {
+                organisationId: user.organisationId,
+                employeeId: employee.id,
+                effectiveTo: null,
+              },
+              select: { id: true, effectiveFrom: true },
+            }),
+            transaction.employeeManagerAssignment.findMany({
+              where: {
+                organisationId: user.organisationId,
+                employeeId: employee.id,
+                effectiveTo: null,
+              },
+              select: { id: true, effectiveFrom: true },
+            }),
+            transaction.employee.findMany({
+              where: {
+                organisationId: user.organisationId,
+                managerId: employee.id,
+              },
+              select: { id: true },
+            }),
+          ]);
+
+        if (
+          activePositionAssignments.some(
+            (assignment) => assignment.effectiveFrom > effectiveDate,
+          )
+        ) {
+          throw new BadRequestException(
+            'Employment end date cannot precede an active position assignment start date.',
+          );
+        }
+        if (
+          activeManagerAssignments.some(
+            (assignment) => assignment.effectiveFrom > effectiveDate,
+          )
+        ) {
+          throw new BadRequestException(
+            'Employment end date cannot precede the current manager assignment start date.',
+          );
+        }
+
+        const directReportIds = directReports.map((report) => report.id);
+        const directReportManagerAssignments = directReportIds.length
+          ? await transaction.employeeManagerAssignment.findMany({
+              where: {
+                organisationId: user.organisationId,
+                employeeId: { in: directReportIds },
+                managerId: employee.id,
+                effectiveTo: null,
+              },
+              select: { id: true, effectiveFrom: true },
+            })
+          : [];
+
+        if (
+          directReportManagerAssignments.some(
+            (assignment) => assignment.effectiveFrom > effectiveDate,
+          )
+        ) {
+          throw new BadRequestException(
+            'Employment end date cannot precede a direct report manager assignment start date.',
+          );
+        }
+
+        if (activePositionAssignments.length) {
+          const closed = await transaction.employeePositionAssignment.updateMany({
+            where: {
+              id: { in: activePositionAssignments.map((assignment) => assignment.id) },
+            },
+            data: { effectiveTo: effectiveDate },
+          });
+          structureCleanup.closedPositionAssignments = closed.count;
+        }
+
+        if (activeManagerAssignments.length) {
+          const closed = await transaction.employeeManagerAssignment.updateMany({
+            where: {
+              id: { in: activeManagerAssignments.map((assignment) => assignment.id) },
+            },
+            data: { effectiveTo: effectiveDate },
+          });
+          structureCleanup.closedEmployeeManagerAssignments = closed.count;
+        }
+
+        if (directReportManagerAssignments.length) {
+          const closed = await transaction.employeeManagerAssignment.updateMany({
+            where: {
+              id: {
+                in: directReportManagerAssignments.map((assignment) => assignment.id),
+              },
+            },
+            data: { effectiveTo: effectiveDate },
+          });
+          structureCleanup.closedDirectReportManagerAssignments = closed.count;
+        }
+
+        if (directReportIds.length) {
+          const detached = await transaction.employee.updateMany({
+            where: {
+              organisationId: user.organisationId,
+              id: { in: directReportIds },
+              managerId: employee.id,
+            },
+            data: { managerId: null },
+          });
+          structureCleanup.detachedDirectReports = detached.count;
+        }
+      }
+
       const updated = await transaction.employee.update({
         where: { id: employee.id },
         data: {
           employmentStatus: options.nextStatus,
           ...(options.setEndDate ? { endDate: effectiveDate } : {}),
           ...(options.clearEndDate ? { endDate: null } : {}),
+          ...(options.closeEmploymentStructure ? { managerId: null } : {}),
         },
       });
 
@@ -424,16 +570,17 @@ export class EmployeeLifecycleService {
             jobTitle: employee.jobTitle,
             employmentType: employee.employmentType,
             linkedUserId: employee.userId,
+            ...(options.closeEmploymentStructure ? { structureCleanup } : {}),
           },
         },
       });
 
-      return updated;
+      return { updated, structureCleanup };
     });
 
     return {
       message: options.message,
-      employee: updatedEmployee,
+      employee: result.updated,
     };
   }
 
@@ -501,6 +648,7 @@ export class EmployeeLifecycleService {
         jobTitle: true,
         employmentType: true,
         employmentStatus: true,
+        startDate: true,
         endDate: true,
       },
     });
