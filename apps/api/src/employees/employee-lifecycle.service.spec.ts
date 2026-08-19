@@ -23,7 +23,19 @@ describe('EmployeeLifecycleService', () => {
 
   function createService(employee: any) {
     const transaction = {
-      employee: { update: jest.fn() },
+      employee: {
+        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      employeePositionAssignment: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      employeeManagerAssignment: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       user: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       authSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
@@ -58,6 +70,7 @@ describe('EmployeeLifecycleService', () => {
     jobTitle: 'Nurse',
     employmentType: 'FULL_TIME',
     employmentStatus: EmploymentStatus.ACTIVE,
+    startDate: new Date('2026-01-01T00:00:00.000Z'),
     endDate: null,
   };
 
@@ -225,8 +238,29 @@ describe('EmployeeLifecycleService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('terminates an employee, disables access and records history', async () => {
+  it('terminates an employee, closes active structure, disables access and records history', async () => {
     const { service, transaction } = createService(activeEmployee);
+
+    transaction.employeePositionAssignment.findMany.mockResolvedValue([
+      {
+        id: 'position-assignment-1',
+        effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ]);
+    transaction.employeeManagerAssignment.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'employee-manager-assignment-1',
+          effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'report-manager-assignment-1',
+          effectiveFrom: new Date('2026-02-01T00:00:00.000Z'),
+        },
+      ]);
+    transaction.employee.findMany.mockResolvedValue([{ id: 'report-1' }]);
 
     const result = await service.terminateEmployee(
       actor,
@@ -234,12 +268,26 @@ describe('EmployeeLifecycleService', () => {
       action,
     );
 
+    expect(transaction.employeePositionAssignment.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['position-assignment-1'] } },
+      data: { effectiveTo: new Date(action.effectiveDate) },
+    });
+    expect(transaction.employeeManagerAssignment.updateMany).toHaveBeenCalledTimes(2);
+    expect(transaction.employee.updateMany).toHaveBeenCalledWith({
+      where: {
+        organisationId: actor.organisationId,
+        id: { in: ['report-1'] },
+        managerId: activeEmployee.id,
+      },
+      data: { managerId: null },
+    });
     expect(transaction.employee.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: activeEmployee.id },
         data: expect.objectContaining({
           employmentStatus: EmploymentStatus.TERMINATED,
           endDate: new Date(action.effectiveDate),
+          managerId: null,
         }),
       }),
     );
@@ -251,11 +299,63 @@ describe('EmployeeLifecycleService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           entity: 'EmployeeLifecycle',
-          metadata: expect.objectContaining({ eventType: 'TERMINATED' }),
+          metadata: expect.objectContaining({
+            eventType: 'TERMINATED',
+            structureCleanup: {
+              closedPositionAssignments: 1,
+              closedEmployeeManagerAssignments: 1,
+              detachedDirectReports: 1,
+              closedDirectReportManagerAssignments: 1,
+            },
+          }),
         }),
       }),
     );
     expect(result.message).toContain('Historical records were preserved');
+  });
+
+  it('rejects a future employment end date before mutating lifecycle state', async () => {
+    const { service, prisma } = createService(activeEmployee);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    await expect(
+      service.terminateEmployee(actor, activeEmployee.id, {
+        ...action,
+        effectiveDate: tomorrow,
+      }),
+    ).rejects.toThrow('Employment end date cannot be in the future');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects an employment end date before the employee start date', async () => {
+    const { service, prisma } = createService(activeEmployee);
+
+    await expect(
+      service.resignEmployee(actor, activeEmployee.id, {
+        ...action,
+        effectiveDate: '2025-12-31T00:00:00.000Z',
+      }),
+    ).rejects.toThrow('cannot precede the employee start date');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects an exit date that would invert an active position assignment range', async () => {
+    const { service, transaction } = createService(activeEmployee);
+    transaction.employeePositionAssignment.findMany.mockResolvedValue([
+      {
+        id: 'position-assignment-1',
+        effectiveFrom: new Date('2026-08-18T00:00:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      service.terminateEmployee(actor, activeEmployee.id, action),
+    ).rejects.toThrow('cannot precede an active position assignment start date');
+
+    expect(transaction.employee.update).not.toHaveBeenCalled();
+    expect(transaction.employeePositionAssignment.updateMany).not.toHaveBeenCalled();
   });
 
   it('suspends an employee and revokes active sessions', async () => {
@@ -309,6 +409,7 @@ describe('EmployeeLifecycleService', () => {
         data: expect.objectContaining({
           employmentStatus: EmploymentStatus.RESIGNED,
           endDate: new Date(action.effectiveDate),
+          managerId: null,
         }),
       }),
     );
