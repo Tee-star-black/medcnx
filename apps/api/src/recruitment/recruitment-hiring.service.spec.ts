@@ -1,4 +1,9 @@
-import { JobApplicationStatus, Prisma, RecruitmentJobStatus } from '@prisma/client';
+import {
+  EmploymentStatus,
+  JobApplicationStatus,
+  Prisma,
+  RecruitmentJobStatus,
+} from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { RecruitmentHiringService } from './recruitment-hiring.service';
 
@@ -48,13 +53,28 @@ describe('RecruitmentHiringService', () => {
     const service = new RecruitmentHiringService(prisma);
 
     const result = await service.hireApplication(user, 'application-1', {
-      employeeNumber: 'MED-100', startDate: '2026-09-01',
+      employeeNumber: 'MED-100', startDate: '2026-08-01',
     });
 
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
     expect(tx.recruitmentHireConversion.count).toHaveBeenCalled();
+    expect(tx.employee.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          employmentStatus: EmploymentStatus.ACTIVE,
+          startDate: new Date('2026-08-01'),
+        }),
+      }),
+    );
+    expect(tx.employeePositionAssignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          effectiveFrom: new Date('2026-08-01'),
+        }),
+      }),
+    );
     expect(tx.recruitmentJob.update).toHaveBeenCalledWith({
       where: { id: 'job-1' }, data: { status: RecruitmentJobStatus.CLOSED },
     });
@@ -67,7 +87,7 @@ describe('RecruitmentHiringService', () => {
     const service = new RecruitmentHiringService(prisma);
 
     await expect(service.hireApplication(user, 'application-1', {
-      employeeNumber: 'MED-101', startDate: '2026-09-01',
+      employeeNumber: 'MED-101', startDate: '2026-08-01',
     })).rejects.toThrow('planned openings');
     expect(tx.employee.create).not.toHaveBeenCalled();
   });
@@ -81,9 +101,23 @@ describe('RecruitmentHiringService', () => {
     const service = new RecruitmentHiringService(prisma);
 
     await service.hireApplication(user, 'application-1', {
-      employeeNumber: 'MED-100', startDate: '2026-09-01',
+      employeeNumber: 'MED-100', startDate: '2026-08-01',
     });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects future start dates before opening a transaction', async () => {
+    const tomorrow = new Date();
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const prisma = { $transaction: jest.fn() } as unknown as PrismaService;
+    const service = new RecruitmentHiringService(prisma);
+
+    await expect(service.hireApplication(user, 'application-1', {
+      employeeNumber: 'MED-102',
+      startDate: tomorrow.toISOString(),
+    })).rejects.toThrow('start date cannot be in the future');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
