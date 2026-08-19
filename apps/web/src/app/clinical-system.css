@@ -1,0 +1,238 @@
+/*
+ * MedCNX platform visual system
+ *
+ * Deliberately flat, square and operational. This layer sits after globals.css
+ * so legacy and newer screens inherit the same visual rules without requiring
+ * a page-by-page rewrite before the product feels coherent.
+ */
+
+:root {
+  --clinical-section-gap: 1.5rem;
+  --clinical-panel-padding: 1.5rem;
+  --clinical-control-height: 3rem;
+  --clinical-edge: 3px;
+}
+
+/* Product rule: no gradients and no rounded application chrome. */
+.app-shell,
+.dark .app-shell,
+.clinical-sidebar {
+  background-image: none !important;
+}
+
+.app-shell::before {
+  display: none !important;
+}
+
+[class*="bg-gradient"],
+[class*="from-"],
+[class*="via-"],
+[class*="to-"] {
+  background-image: none !important;
+}
+
+.app-shell *,
+.employee-content *,
+.workspace-content * {
+  border-radius: 0 !important;
+}
+
+/* Calm, flat canvas. Panels carry structure instead of decorative backgrounds. */
+.app-shell {
+  background-color: var(--background) !important;
+}
+
+.workspace-content,
+.employee-content {
+  padding-bottom: 3rem;
+}
+
+.workspace-content > * + *,
+.employee-content > * + * {
+  margin-top: var(--clinical-section-gap);
+}
+
+/* Shared panel language across old and new modules. */
+.workspace-content section[class*="border"],
+.workspace-content article[class*="border"],
+.workspace-content div[class*="border"][class*="bg-white"],
+.employee-content section[class*="border"],
+.employee-content article[class*="border"],
+.employee-content div[class*="border"][class*="bg-white"] {
+  border-color: var(--border) !important;
+  background-color: var(--surface) !important;
+  box-shadow: 3px 3px 0 rgba(8, 41, 56, 0.035) !important;
+}
+
+.dark .workspace-content section[class*="border"],
+.dark .workspace-content article[class*="border"],
+.dark .employee-content section[class*="border"],
+.dark .employee-content article[class*="border"] {
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.18) !important;
+}
+
+/* Every major bordered section gets one architectural edge, not decoration. */
+.workspace-content section[class*="border"],
+.employee-content section[class*="border"] {
+  position: relative;
+}
+
+.workspace-content section[class*="border"]::after,
+.employee-content section[class*="border"]::after {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 3.5rem;
+  height: var(--clinical-edge);
+  content: "";
+  pointer-events: none;
+  background: var(--accent);
+}
+
+/* Forms: square, tactile, readable and consistent. */
+.workspace-content input,
+.workspace-content select,
+.workspace-content textarea,
+.employee-content input,
+.employee-content select,
+.employee-content textarea,
+.control,
+.med-input {
+  border: 1px solid var(--border-strong) !important;
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+.workspace-content input:not([type="checkbox"]):not([type="radio"]),
+.workspace-content select,
+.employee-content input:not([type="checkbox"]):not([type="radio"]),
+.employee-content select {
+  min-height: var(--clinical-control-height);
+}
+
+.workspace-content input:focus,
+.workspace-content select:focus,
+.workspace-content textarea:focus,
+.employee-content input:focus,
+.employee-content select:focus,
+.employee-content textarea:focus,
+.control:focus,
+.med-input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: inset 3px 0 0 var(--accent) !important;
+  outline: 2px solid var(--accent-ring) !important;
+  outline-offset: 1px;
+}
+
+.workspace-content label,
+.employee-content label {
+  color: var(--text-soft) !important;
+  font-weight: 750 !important;
+}
+
+/* Buttons should look like controls, not rounded marketing calls-to-action. */
+.app-shell button,
+.app-shell a[class*="border"],
+.employee-content button,
+.employee-content a[class*="border"] {
+  box-shadow: none !important;
+}
+
+.app-shell button:not(:disabled):active,
+.app-shell a[class*="border"]:active,
+.employee-content button:not(:disabled):active {
+  transform: translate(1px, 1px) !important;
+}
+
+.app-shell button[class*="shadow"],
+.app-shell a[class*="shadow"],
+.employee-content button[class*="shadow"],
+.employee-content a[class*="shadow"] {
+  box-shadow: none !important;
+}
+
+/* Tables are operational surfaces: denser, aligned and easy to scan. */
+.clinical-data-table,
+.workspace-content table,
+.employee-content table {
+  border-color: var(--border) !important;
+}
+
+.workspace-content thead,
+.employee-content thead,
+.clinical-data-table thead {
+  background: var(--surface-soft) !important;
+}
+
+.workspace-content th,
+.employee-content th,
+.clinical-data-table th {
+  border-bottom: 1px solid var(--border-strong) !important;
+  color: var(--text-soft) !important;
+  font-size: 0.75rem !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase;
+}
+
+.workspace-content td,
+.employee-content td,
+.clinical-data-table td {
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-soft);
+  vertical-align: middle;
+}
+
+.workspace-content tbody tr:hover,
+.employee-content tbody tr:hover,
+.clinical-data-table tbody tr:hover {
+  background: var(--accent-soft) !important;
+}
+
+/* Headings use one rhythm across modules, including legacy screens. */
+.workspace-content h1,
+.employee-content h1,
+.clinical-page-title {
+  color: var(--text) !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.045em !important;
+}
+
+.workspace-content h2,
+.employee-content h2 {
+  color: var(--text) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.workspace-content p[class*="uppercase"],
+.employee-content p[class*="uppercase"],
+.clinical-page-eyebrow {
+  letter-spacing: 0.16em !important;
+}
+
+/* Status chips stay compact but square. */
+.app-shell span[class*="rounded"],
+.employee-content span[class*="rounded"] {
+  border-radius: 0 !important;
+}
+
+/* Drawers and dialogs are hard-edged work surfaces. */
+.app-shell [role="dialog"],
+.employee-content [role="dialog"] {
+  border-radius: 0 !important;
+}
+
+/* Responsive density. */
+@media (max-width: 767px) {
+  :root {
+    --clinical-section-gap: 1rem;
+    --clinical-panel-padding: 1.125rem;
+  }
+
+  .workspace-content,
+  .employee-content {
+    padding-bottom: 2rem;
+  }
+}
