@@ -662,14 +662,14 @@ export class EmployeeLifecycleService {
     changeLabel: string,
   ) {
     const activeAssignment =
-      await this.prisma.employeePositionAssignment.findFirst({
+      (await this.prisma.employeePositionAssignment?.findFirst({
         where: {
           organisationId: user.organisationId,
           employeeId,
           effectiveTo: null,
         },
         select: { id: true, positionId: true },
-      });
+      })) ?? null;
 
     if (activeAssignment) {
       throw new BadRequestException(
