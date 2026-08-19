@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Ban, Loader2, RotateCcw, UserMinus, X } from 'lucide-react';
+import { EmployeeEmploymentChanges } from '@/components/employees/EmployeeEmploymentChanges';
 import { api } from '@/lib/api';
 
 type EmploymentStatus =
@@ -19,6 +20,9 @@ type EmployeeLifecycleTarget = {
   lastName: string;
   employmentStatus: string;
   startDate?: string | null;
+  jobTitle?: string | null;
+  employmentType?: string | null;
+  department?: { id: string; name: string } | null;
 };
 
 type Props = {
@@ -166,56 +170,78 @@ export function EmployeeLifecycleActions({ employee, onChanged, onError }: Props
     }
   }
 
-  if (
-    currentStatus === 'TERMINATED' ||
-    currentStatus === 'RESIGNED'
-  ) {
+  if (currentStatus === 'TERMINATED' || currentStatus === 'RESIGNED') {
     return (
-      <div className="border border-black/10 bg-[#f8fafc] p-4 text-sm leading-6 text-gray-600">
-        Employment is closed. Historical records remain available, but no further lifecycle action is available from this profile.
+      <div className="space-y-4">
+        <div className="border border-black/10 bg-[#f8fafc] p-4 text-sm leading-6 text-gray-600">
+          Employment is closed. Historical records remain available, but no further lifecycle action is available from this profile.
+        </div>
+        <EmployeeEmploymentChanges
+          employee={employee}
+          onChanged={onChanged}
+          onError={onError}
+        />
       </div>
     );
   }
 
   return (
     <>
-      <div className="grid gap-3">
-        {(Object.keys(actionConfig) as LifecycleAction[])
-          .filter((action) => actionConfig[action].allowed.includes(currentStatus))
-          .map((action) => {
-            const item = actionConfig[action];
-            return (
-              <button
-                key={action}
-                type="button"
-                onClick={() => openAction(action)}
-                disabled={Boolean(busyAction)}
-                className={`flex w-full items-start gap-3 border px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  item.danger
-                    ? 'border-red-200 bg-red-50 text-red-700 hover:border-red-600'
-                    : 'border-black/10 bg-[#f8fafc] text-gray-700 hover:border-black hover:text-black'
-                }`}
-              >
-                <span className="mt-0.5 shrink-0">
-                  {busyAction === action ? (
-                    <Loader2 className="animate-spin" size={16} />
-                  ) : (
-                    item.icon
-                  )}
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold">{item.buttonLabel}</span>
-                  <span className="mt-1 block text-xs leading-5 opacity-70">
-                    {item.helper}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
+      <div className="space-y-5">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
+            Employment changes
+          </p>
+          <EmployeeEmploymentChanges
+            employee={employee}
+            onChanged={onChanged}
+            onError={onError}
+          />
+        </div>
 
-        <p className="border-t border-black/10 pt-3 text-xs leading-5 text-gray-500">
-          Leave status is managed through the leave workflow. Lifecycle actions require an effective date and reason and are written to employment history.
-        </p>
+        <div className="border-t border-black/10 pt-5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
+            Status transitions
+          </p>
+          <div className="grid gap-3">
+            {(Object.keys(actionConfig) as LifecycleAction[])
+              .filter((action) => actionConfig[action].allowed.includes(currentStatus))
+              .map((action) => {
+                const item = actionConfig[action];
+                return (
+                  <button
+                    key={action}
+                    type="button"
+                    onClick={() => openAction(action)}
+                    disabled={Boolean(busyAction)}
+                    className={`flex w-full items-start gap-3 border px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      item.danger
+                        ? 'border-red-200 bg-red-50 text-red-700 hover:border-red-600'
+                        : 'border-black/10 bg-[#f8fafc] text-gray-700 hover:border-black hover:text-black'
+                    }`}
+                  >
+                    <span className="mt-0.5 shrink-0">
+                      {busyAction === action ? (
+                        <Loader2 className="animate-spin" size={16} />
+                      ) : (
+                        item.icon
+                      )}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold">{item.buttonLabel}</span>
+                      <span className="mt-1 block text-xs leading-5 opacity-70">
+                        {item.helper}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+
+            <p className="border-t border-black/10 pt-3 text-xs leading-5 text-gray-500">
+              Leave status is managed through the leave workflow. Employment changes and lifecycle actions require an effective date and reason and are written to employment history.
+            </p>
+          </div>
+        </div>
       </div>
 
       {dialogAction && config ? (
