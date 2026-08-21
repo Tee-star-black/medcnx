@@ -313,54 +313,109 @@ export class PositionsService {
   }
 
   async update(user: CurrentUser, positionId: string, dto: UpdatePositionDto) {
-    const existing = await this.getPosition(user, positionId);
-
     if (dto.departmentId !== undefined && dto.departmentId !== null) {
       await this.assertDepartment(user, dto.departmentId);
     }
 
-    if (dto.code && dto.code.trim() !== existing.code) {
-      const duplicate = await this.prisma.position.findFirst({
-        where: {
-          organisationId: user.organisationId,
-          code: dto.code.trim(),
-          id: { not: positionId },
-        },
-      });
-      if (duplicate) throw new ConflictException('Position code already exists.');
+    for (let attempt = 1; attempt <= SERIALIZABLE_RETRY_LIMIT; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (transaction) => {
+            const existing = await transaction.position.findFirst({
+              where: {
+                id: positionId,
+                organisationId: user.organisationId,
+              },
+            });
+            if (!existing) throw new NotFoundException('Position not found.');
+
+            if (dto.code && dto.code.trim() !== existing.code) {
+              const duplicate = await transaction.position.findFirst({
+                where: {
+                  organisationId: user.organisationId,
+                  code: dto.code.trim(),
+                  id: { not: positionId },
+                },
+              });
+              if (duplicate) {
+                throw new ConflictException('Position code already exists.');
+              }
+            }
+
+            let activeAssignments: number | null = null;
+            if (dto.approvedHeadcount !== undefined) {
+              activeAssignments =
+                await transaction.employeePositionAssignment.count({
+                  where: {
+                    organisationId: user.organisationId,
+                    positionId,
+                    effectiveTo: null,
+                  },
+                });
+
+              if (dto.approvedHeadcount < activeAssignments) {
+                throw new ConflictException(
+                  `Approved headcount cannot be lower than the ${activeAssignments} active assignment${activeAssignments === 1 ? '' : 's'} currently occupying this position.`,
+                );
+              }
+            }
+
+            const position = await transaction.position.update({
+              where: { id: positionId },
+              data: {
+                code: dto.code?.trim(),
+                title: dto.title?.trim(),
+                departmentId:
+                  dto.departmentId === undefined ? undefined : dto.departmentId,
+                description: dto.description?.trim(),
+                level: dto.level?.trim(),
+                employmentCategory: dto.employmentCategory?.trim(),
+                approvedHeadcount: dto.approvedHeadcount,
+                active: dto.active,
+              },
+            });
+
+            await transaction.auditLog.create({
+              data: {
+                organisationId: user.organisationId,
+                actorUserId: user.id,
+                action: AuditAction.UPDATE,
+                entity: 'Position',
+                entityId: position.id,
+                message: `Position updated: ${position.title}.`,
+                metadata: {
+                  previous: existing,
+                  next: position,
+                  activeAssignmentsAtUpdate: activeAssignments,
+                },
+              },
+            });
+
+            return position;
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        );
+      } catch (error: unknown) {
+        if (
+          this.isSerializableConflict(error) &&
+          attempt < SERIALIZABLE_RETRY_LIMIT
+        ) {
+          continue;
+        }
+        if (this.isSerializableConflict(error)) {
+          throw new ConflictException(
+            'Position headcount or assignments changed while this update was being processed. Refresh and try again.',
+          );
+        }
+        throw error;
+      }
     }
 
-    const position = await this.prisma.position.update({
-      where: { id: positionId },
-      data: {
-        code: dto.code?.trim(),
-        title: dto.title?.trim(),
-        departmentId:
-          dto.departmentId === undefined ? undefined : dto.departmentId,
-        description: dto.description?.trim(),
-        level: dto.level?.trim(),
-        employmentCategory: dto.employmentCategory?.trim(),
-        approvedHeadcount: dto.approvedHeadcount,
-        active: dto.active,
-      },
-    });
-
-    await this.prisma.auditLog.create({
-      data: {
-        organisationId: user.organisationId,
-        actorUserId: user.id,
-        action: AuditAction.UPDATE,
-        entity: 'Position',
-        entityId: position.id,
-        message: `Position updated: ${position.title}.`,
-        metadata: {
-          previous: existing,
-          next: position,
-        },
-      },
-    });
-
-    return position;
+    throw new ConflictException(
+      'Position headcount or assignments changed while this update was being processed. Refresh and try again.',
+    );
   }
 
   async archive(user: CurrentUser, positionId: string) {
