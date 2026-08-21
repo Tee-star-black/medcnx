@@ -173,8 +173,14 @@ export default function PositionsPage() {
     event.preventDefault();
 
     const approvedHeadcount = Number(form.approvedHeadcount);
-    if (!Number.isInteger(approvedHeadcount) || approvedHeadcount < 0) {
-      setError('Approved headcount must be a whole number of zero or more.');
+    const minimumHeadcount = editing?.currentHeadcount ?? 0;
+
+    if (!Number.isInteger(approvedHeadcount) || approvedHeadcount < minimumHeadcount) {
+      setError(
+        editing
+          ? `Approved headcount must be a whole number of at least ${minimumHeadcount}, because ${minimumHeadcount} active employee${minimumHeadcount === 1 ? '' : 's'} currently occupy this position.`
+          : 'Approved headcount must be a whole number of zero or more.',
+      );
       return;
     }
 
@@ -422,7 +428,19 @@ export default function PositionsPage() {
                   <input className={inputClass} value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} minLength={2} maxLength={50} required placeholder="e.g. SRN-001" />
                 </Field>
                 <Field label="Approved headcount" required>
-                  <input className={inputClass} type="number" min={0} value={form.approvedHeadcount} onChange={(event) => setForm((current) => ({ ...current, approvedHeadcount: event.target.value }))} required />
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min={editing?.currentHeadcount ?? 0}
+                    value={form.approvedHeadcount}
+                    onChange={(event) => setForm((current) => ({ ...current, approvedHeadcount: event.target.value }))}
+                    required
+                  />
+                  {editing ? (
+                    <p className="mt-2 text-xs leading-5 text-gray-500">
+                      Minimum {editing.currentHeadcount}. Active assignments cannot be displaced by reducing approved establishment.
+                    </p>
+                  ) : null}
                 </Field>
               </div>
 
