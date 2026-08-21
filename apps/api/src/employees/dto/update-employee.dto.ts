@@ -1,7 +1,6 @@
 import {
   IsDateString,
   IsEmail,
-  IsIn,
   IsOptional,
   IsString,
   MaxLength,
@@ -35,32 +34,6 @@ export class UpdateEmployeeDto {
   @IsString()
   @MaxLength(30)
   phone?: string;
-
-  @IsOptional()
-  @IsString()
-  departmentId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  jobTitle?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  employmentType?: string;
-
-  @IsOptional()
-  @IsIn(['ACTIVE', 'ON_LEAVE', 'TERMINATED', 'RESIGNED', 'SUSPENDED'])
-  employmentStatus?: 'ACTIVE' | 'ON_LEAVE' | 'TERMINATED' | 'RESIGNED' | 'SUSPENDED';
-
-  @IsOptional()
-  @IsDateString()
-  startDate?: string;
-
-  @IsOptional()
-  @IsDateString()
-  endDate?: string;
 
   @IsOptional()
   @IsString()
