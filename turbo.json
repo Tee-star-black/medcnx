@@ -1,5 +1,33 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "PORT",
+    "FRONTEND_URL",
+    "FRONTEND_URLS",
+    "TRUST_PROXY",
+    "DATABASE_URL",
+    "JWT_ACCESS_SECRET",
+    "JWT_REFRESH_SECRET",
+    "JWT_ACCESS_EXPIRES_IN",
+    "JWT_REFRESH_EXPIRES_IN",
+    "AUTH_MAX_LOGIN_ATTEMPTS",
+    "AUTH_LOCKOUT_MINUTES",
+    "PAYROLL_OTP_SECRET",
+    "PAYROLL_OTP_EXPIRY_MINUTES",
+    "PAYROLL_OTP_RESEND_SECONDS",
+    "MAIL_HOST",
+    "MAIL_PORT",
+    "MAIL_SECURE",
+    "MAIL_USER",
+    "MAIL_PASSWORD",
+    "MAIL_FROM_NAME",
+    "MAIL_FROM_EMAIL",
+    "DOCUMENT_STORAGE_DRIVER",
+    "DOCUMENT_STORAGE_LOCAL_ROOT",
+    "LIBREOFFICE_BINARY",
+    "DOCUMENT_PDF_TIMEOUT_MS"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
