@@ -4,6 +4,13 @@
   "private": true,
   "description": "MedCNX - secure HR management platform for healthcare organisations.",
   "packageManager": "npm@11.6.2",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.6.2",
+      "onFail": "error"
+    }
+  },
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
